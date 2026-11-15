@@ -101,3 +101,27 @@
 .settings-grid{grid-template-columns:1fr 1fr}
 @media(max-width:850px){.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-grid,.calendar-grid,.settings-grid{grid-template-columns:1fr}.quick-actions{grid-template-columns:1fr}.draft-editor-footer{align-items:flex-start;flex-direction:column}.simple-row{align-items:flex-start}.simple-row .draft-status{flex-shrink:0}}
 @media(max-width:520px){.stats-grid{grid-template-columns:1fr 1fr}.stat-card strong{font-size:23px}.button-row{width:100%}.button-row button{flex:1}.simple-row strong{white-space:normal}}
+
+/* Notifications, supported-channel states and account-safe publishing */
+.notification-wrap{position:relative}
+.notification-trigger{position:relative}
+.notification-trigger i{position:absolute;right:5px;top:5px;width:7px;height:7px;border-radius:50%;background:#a4f06b;border:1px solid #0d1424}
+.notification-panel{position:absolute;right:0;top:42px;width:min(360px,calc(100vw - 36px));max-height:440px;overflow:auto;z-index:50;background:#111a2c;border:1px solid #34415b;border-radius:13px;box-shadow:0 18px 50px #0008;padding:12px}
+.notification-heading{display:flex;align-items:center;justify-content:space-between;padding:5px 4px 11px;border-bottom:1px solid #29354b}
+.notification-heading strong{font-size:13px}
+.notification-heading button{display:flex;align-items:center;gap:5px;border:0;background:none;color:#bce89f;font-size:10px}
+.notification-item{display:grid;gap:5px;width:100%;text-align:left;padding:12px 7px;border:0;border-bottom:1px solid #27334a;background:transparent;color:#eaf0fb}
+.notification-item.unread{background:#18271f}
+.notification-item strong{font-size:11px}
+.notification-item span{font-size:10px;color:#aeb9cc;line-height:1.45}
+.notification-item small{font-size:9px;color:#77849a}
+.platform-choice:disabled,.platform-disabled{opacity:.55;cursor:not-allowed}
+.platform-choice small{font-size:9px;color:#d6b66e}
+.integration-block{display:grid;gap:6px;margin-top:auto;padding:13px;border:1px dashed #46536c;border-radius:10px;background:#10192a}
+.integration-block strong{font-size:11px;color:#e6c47a}
+.integration-block span{font-size:10px;line-height:1.5;color:#9eabc0}
+.settings-api-note{display:grid;gap:6px;margin-top:18px;padding:14px;border:1px solid #2d3a52;border-radius:10px;background:#10192a}
+.settings-api-note strong{font-size:11px}
+.settings-api-note span{font-size:10px;line-height:1.5;color:#9eabc0}
+.draft-editor-footer .button-row{align-items:center}
+@media(max-width:850px){.notification-panel{position:fixed;top:64px;right:14px}}

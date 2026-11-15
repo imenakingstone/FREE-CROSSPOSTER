@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
-import { LayoutDashboard, CalendarDays, FileText, History, Link2, Settings, LogOut, ImagePlus, Send, ShieldCheck, Video, Instagram, Facebook, Trash2, Clock3, Plus, Save, X, RefreshCw } from 'lucide-react'
+import { LayoutDashboard, CalendarDays, FileText, History, Link2, Settings, LogOut, ImagePlus, Send, ShieldCheck, Video, Instagram, Trash2, Clock3, Plus, Save, X, RefreshCw, Bell, CheckCheck } from 'lucide-react'
 
 const platforms = [
   { id: 'instagram', label: 'Instagram', mark: 'IG' },
@@ -29,6 +29,9 @@ export default function App() {
   const [activeView, setActiveView] = useState('overview')
   const [posts, setPosts] = useState([])
   const [socialAccounts, setSocialAccounts] = useState([])
+  const [postDestinations, setPostDestinations] = useState([])
+  const [notifications, setNotifications] = useState([])
+  const [notificationOpen, setNotificationOpen] = useState(false)
   const [logs, setLogs] = useState([])
   const [schedules, setSchedules] = useState([])
   const [profile, setProfile] = useState({ display_name: '', avatar_url: '' })
@@ -54,7 +57,7 @@ export default function App() {
   }, [session?.user?.id])
 
   async function refreshWorkspace() {
-    await Promise.all([loadPosts(), loadAccounts(), loadLogs(), loadSchedules(), loadProfile(), loadSettings()])
+    await Promise.all([loadPosts(), loadAccounts(), loadDestinations(), loadNotifications(), loadLogs(), loadSchedules(), loadProfile(), loadSettings()])
   }
   async function loadPosts() {
     const { data, error } = await supabase.from('posts').select('id,caption,media_path,media_type,original_filename,status,created_at,updated_at').order('created_at', { ascending: false }).limit(100)
@@ -63,6 +66,24 @@ export default function App() {
   async function loadAccounts() {
     const { data, error } = await supabase.from('social_accounts').select('id,platform,platform_user_id,username,display_name,account_status,token_expires_at,connected_at').order('connected_at', { ascending: false })
     if (error) setNotice(error.message); else setSocialAccounts(data || [])
+  }
+  async function loadDestinations() {
+    const { data, error } = await supabase.from('post_destinations').select('id,post_id,platform,status,social_account_id,platform_post_id,published_at,error_message').order('created_at', { ascending: false }).limit(300)
+    if (error) setNotice(error.message); else setPostDestinations(data || [])
+  }
+  async function loadNotifications() {
+    const { data, error } = await supabase.from('notifications').select('id,type,title,body,read_at,created_at,related_post_id').order('created_at', { ascending: false }).limit(25)
+    if (error) { if (!error.message?.includes('not find')) setNotice(error.message) } else setNotifications(data || [])
+  }
+  async function markNotificationRead(item) {
+    if (!item.read_at) {
+      const { error } = await supabase.from('notifications').update({ read_at: new Date().toISOString() }).eq('id', item.id)
+      if (error) setNotice(error.message); else await loadNotifications()
+    }
+  }
+  async function markAllNotificationsRead() {
+    const { error } = await supabase.from('notifications').update({ read_at: new Date().toISOString() }).is('read_at', null)
+    if (error) setNotice(error.message); else await loadNotifications()
   }
   async function loadLogs() {
     const { data, error } = await supabase.from('publishing_logs').select('id,post_id,destination_id,platform,status,message,created_at').order('created_at', { ascending: false }).limit(100)
@@ -94,7 +115,7 @@ export default function App() {
       }
     } catch (error) { setNotice(error.message || 'Authentication failed.') } finally { setAuthBusy(false) }
   }
-  async function handleSignOut() { await supabase.auth.signOut(); setPosts([]); setSocialAccounts([]); setLogs([]); setSchedules([]) }
+  async function handleSignOut() { await supabase.auth.signOut(); setPosts([]); setSocialAccounts([]); setPostDestinations([]); setNotifications([]); setLogs([]); setSchedules([]) }
 
   async function connectInstagram() {
     setBusy(true); setNotice('')
@@ -105,10 +126,10 @@ export default function App() {
       window.location.assign(data.url)
     } catch (error) { setNotice(error.message || 'Could not start Instagram authorization.'); setBusy(false) }
   }
-  async function publishInstagram(postId) {
+  async function publishInstagram(postId, destinationId) {
     setPublishingPostId(postId); setNotice('')
     try {
-      const { data, error } = await supabase.functions.invoke('instagram-publish', { body: { post_id: postId } })
+      const { data, error } = await supabase.functions.invoke('instagram-publish', { body: { post_id: postId, destination_id: destinationId } })
       if (error) throw error
       if (data?.error) throw new Error(data.error)
       setNotice('Meta confirmed that the post was published to Instagram.')
@@ -135,9 +156,11 @@ export default function App() {
       }
       const { data: post, error: postError } = await supabase.from('posts').insert({ user_id: session.user.id, caption: caption.trim(), media_path: mediaPath, media_type: mediaType, original_filename: file?.name || null, status: 'draft' }).select('id').single()
       if (postError) throw postError
-      const destinations = selectedPlatforms.map(platform => {
-        const account = socialAccounts.find(item => item.platform === platform && item.account_status === 'connected')
-        return { post_id: post.id, user_id: session.user.id, platform, social_account_id: account?.id || null, status: 'pending' }
+      const destinations = selectedPlatforms.flatMap(platform => {
+        const linkedAccounts = socialAccounts.filter(item => item.platform === platform && item.account_status === 'connected')
+        return linkedAccounts.length
+          ? linkedAccounts.map(account => ({ post_id: post.id, user_id: session.user.id, platform, social_account_id: account.id, status: 'pending' }))
+          : [{ post_id: post.id, user_id: session.user.id, platform, social_account_id: null, status: 'pending' }]
       })
       const { error: destinationError } = await supabase.from('post_destinations').insert(destinations)
       if (destinationError) throw destinationError
@@ -190,6 +213,10 @@ export default function App() {
     const { error } = await supabase.from('social_accounts').delete().eq('id', account.id).eq('user_id', session.user.id)
     if (error) setNotice(error.message); else { setNotice('Account disconnected.'); await loadAccounts() }
   }
+  async function sendPasswordReset() {
+    const { error } = await supabase.auth.resetPasswordForEmail(session.user.email, { redirectTo: window.location.origin })
+    if (error) setNotice(error.message); else setNotice('Password reset email sent. Check your inbox.')
+  }
   async function saveProfile(event) {
     event.preventDefault(); setBusy(true)
     try {
@@ -213,7 +240,7 @@ export default function App() {
   const [destRows, setDestRows] = useState([])
   useEffect(() => {
     if (!session?.user || !schedulePostId) { setDestRows([]); return }
-    supabase.from('post_destinations').select('id,platform,status').eq('post_id', schedulePostId).then(({ data }) => setDestRows(data || []))
+    supabase.from('post_destinations').select('id,platform,status,social_account_id').eq('post_id', schedulePostId).then(({ data }) => setDestRows(data || []))
   }, [schedulePostId, session?.user?.id])
 
   if (!isSupabaseConfigured) return <SetupMessage />
@@ -229,15 +256,15 @@ export default function App() {
       <div className="sidebar-bottom"><div className="sidebar-user"><span className="avatar">{(session.user.email || 'U').slice(0,1).toUpperCase()}</span><span className="sidebar-user-email">{session.user.email}</span></div><button className="sidebar-signout" onClick={handleSignOut}><LogOut size={16} /> Sign out</button></div>
     </aside>
     <section className="app-main">
-      <header className="topbar"><div><span className="topbar-kicker">YOUR WORKSPACE</span><strong>{activeTitle}</strong></div><div className="user-area"><span className="user-email">{session.user.email}</span><button className="icon-btn" onClick={refreshWorkspace} title="Refresh workspace"><RefreshCw size={17}/></button></div></header>
+      <header className="topbar"><div><span className="topbar-kicker">YOUR WORKSPACE</span><strong>{activeTitle}</strong></div><div className="user-area"><span className="user-email">{session.user.email}</span><div className="notification-wrap"><button className="icon-btn notification-trigger" onClick={()=>setNotificationOpen(v=>!v)} title="Notifications"><Bell size={17}/>{notifications.some(n=>!n.read_at)&&<i/>}</button>{notificationOpen&&<div className="notification-panel"><div className="notification-heading"><strong>Notifications</strong><button onClick={markAllNotificationsRead}><CheckCheck size={13}/> Mark all read</button></div>{notifications.map(item=><button key={item.id} className={'notification-item '+(!item.read_at?'unread':'')} onClick={()=>markNotificationRead(item)}><strong>{item.title}</strong><span>{item.body}</span><small>{new Date(item.created_at).toLocaleString()}</small></button>)}{!notifications.length&&<p className="empty-state">No notifications yet.</p>}</div>}</div><button className="icon-btn" onClick={refreshWorkspace} title="Refresh workspace"><RefreshCw size={17}/></button></div></header>
       <div className="dashboard-content">
         {activeView === 'overview' && <Overview posts={posts} accounts={socialAccounts} schedules={schedules} logs={logs} onNavigate={setActiveView} />}
         {activeView === 'create' && <CreatePost caption={caption} setCaption={setCaption} file={file} setFile={setFile} selectedPlatforms={selectedPlatforms} setSelectedPlatforms={setSelectedPlatforms} onSubmit={createDraft} busy={busy} />}
-        {activeView === 'drafts' && <Drafts posts={draftPosts} onDelete={deleteDraft} onSave={saveCaption} onPublish={publishInstagram} publishingPostId={publishingPostId} />}
+        {activeView === 'drafts' && <Drafts posts={draftPosts} destinations={postDestinations} accounts={socialAccounts} onDelete={deleteDraft} onSave={saveCaption} onPublish={publishInstagram} publishingPostId={publishingPostId} />}
         {activeView === 'calendar' && <CalendarView posts={posts} schedules={schedules} onSchedule={schedulePost} onCancel={cancelSchedule} busy={busy} schedulePostId={schedulePostId} setSchedulePostId={setSchedulePostId} destinationId={scheduleDestinationId} setDestinationId={setScheduleDestinationId} scheduleAt={scheduleAt} setScheduleAt={setScheduleAt} destinations={destRows} />}
         {activeView === 'history' && <HistoryView logs={logs} posts={posts} />}
         {activeView === 'accounts' && <Accounts accounts={socialAccounts} onConnect={connectInstagram} onDisconnect={disconnectAccount} busy={busy} />}
-        {activeView === 'settings' && <SettingsView profile={profile} setProfile={setProfile} settings={settings} setSettings={setSettings} onProfileSave={saveProfile} onSettingsSave={saveSettings} busy={busy} email={session.user.email} />}
+        {activeView === 'settings' && <SettingsView profile={profile} setProfile={setProfile} settings={settings} setSettings={setSettings} onProfileSave={saveProfile} onSettingsSave={saveSettings} onPasswordReset={sendPasswordReset} busy={busy} email={session.user.email} />}
         {notice && <p className="notice workspace-notice">{notice}</p>}
       </div>
     </section>
@@ -254,11 +281,11 @@ function Overview({posts,accounts,schedules,logs,onNavigate}) {
   return <><PageHeader eyebrow="YOUR PUBLISHING WORKSPACE" title="Good to see you." description="A clear view of your content and connected channels." action={<span className="status-pill"><span/> Workspace ready</span>}/><div className="stats-grid">{stats.map(([label,value])=><div className="card stat-card" key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><div className="dashboard-grid overview-grid"><section className="card"><div className="section-heading"><div><h2>Quick actions</h2><p className="muted small">Pick up where you left off.</p></div></div><div className="quick-actions"><button className="quick-action" onClick={()=>onNavigate('create')}><Plus/>Create a post</button><button className="quick-action" onClick={()=>onNavigate('calendar')}><CalendarDays/>Schedule content</button><button className="quick-action" onClick={()=>onNavigate('accounts')}><Link2/>Connect an account</button></div></section><section className="card"><div className="section-heading"><div><h2>Channels</h2><p className="muted small">Connection status</p></div></div>{platforms.map(p=><div className="channel-row" key={p.id}><span className={'platform-mark '+p.id}>{p.mark}</span><span>{p.label}</span><span className="not-connected">{accounts.filter(a=>a.platform===p.id&&a.account_status==='connected').length} connected</span></div>)}</section></div><section className="card recent-card"><div className="section-heading"><div><h2>Recent content</h2><p className="muted small">Your latest posts.</p></div><button className="text-action" onClick={()=>onNavigate('drafts')}>View drafts</button></div>{posts.slice(0,5).map(p=><div className="simple-row" key={p.id}><div><strong>{p.caption || 'Media-only post'}</strong><span>{new Date(p.created_at).toLocaleString()}</span></div><span className="draft-status">{p.status}</span></div>)}{!posts.length&&<div className="empty-state">No posts yet. Create your first post.</div>}</section></>
 }
 function CreatePost({caption,setCaption,file,setFile,selectedPlatforms,setSelectedPlatforms,onSubmit,busy}) {
-  return <><PageHeader eyebrow="CONTENT STUDIO" title="Create a post." description="Prepare your content once and choose where it should go."/><div className="card composer"><form onSubmit={onSubmit}><label>Caption<textarea rows="6" value={caption} onChange={e=>setCaption(e.target.value)} placeholder="Write your caption…"/></label><label className="upload-zone"><input type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm" onChange={e=>setFile(e.target.files?.[0]||null)}/>{file?<><div className="upload-icon"><Video/></div><strong>{file.name}</strong><span>{(file.size/1024/1024).toFixed(1)} MB · click to replace</span></>:<><div className="upload-icon"><ImagePlus/></div><strong>Add a photo or video</strong><span>JPEG, PNG, WebP, GIF, MP4, MOV or WebM · max 50 MB</span></>}</label><div className="destination-block"><div className="destination-title"><span>Choose destinations</span><span className="muted tiny">Publishing requires an authorized account</span></div><div className="platform-list">{platforms.map(p=><button type="button" key={p.id} className={'platform-choice '+(selectedPlatforms.includes(p.id)?'selected':'')} onClick={()=>setSelectedPlatforms(current=>current.includes(p.id)?current.filter(x=>x!==p.id):[...current,p.id])}><span className={'platform-mark '+p.id}>{p.mark}</span>{p.label}<span className="check">{selectedPlatforms.includes(p.id)?'✓':'+'}</span></button>)}</div></div><button className="primary-btn full" disabled={busy}>{busy?'Saving…':'Save post draft'} <Send size={16}/></button></form></div></>
+  return <><PageHeader eyebrow="CONTENT STUDIO" title="Create a post." description="Prepare your content once and choose where it should go."/><div className="card composer"><form onSubmit={onSubmit}><label>Caption<textarea rows="6" value={caption} onChange={e=>setCaption(e.target.value)} placeholder="Write your caption…"/></label><label className="upload-zone"><input type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm" onChange={e=>setFile(e.target.files?.[0]||null)}/>{file?<><div className="upload-icon"><Video/></div><strong>{file.name}</strong><span>{(file.size/1024/1024).toFixed(1)} MB · click to replace</span></>:<><div className="upload-icon"><ImagePlus/></div><strong>Add a photo or video</strong><span>JPEG, PNG, WebP, GIF, MP4, MOV or WebM · max 50 MB</span></>}</label><div className="destination-block"><div className="destination-title"><span>Choose destinations</span><span className="muted tiny">Publishing requires an authorized account</span></div><div className="platform-list">{platforms.map(p=><button type="button" key={p.id} disabled={p.id!=='instagram'} className={'platform-choice '+(selectedPlatforms.includes(p.id)?'selected':'')+(p.id!=='instagram'?' platform-disabled':'')} onClick={()=>setSelectedPlatforms(current=>current.includes(p.id)?current.filter(x=>x!==p.id):[...current,p.id])}><span className={'platform-mark '+p.id}>{p.mark}</span>{p.label}{p.id!=='instagram'&&<small>API setup required</small>}<span className="check">{selectedPlatforms.includes(p.id)?'✓':p.id==='instagram'?'+':'—'}</span></button>)}</div></div><button className="primary-btn full" disabled={busy}>{busy?'Saving…':'Save post draft'} <Send size={16}/></button></form></div></>
 }
-function Drafts({posts,onDelete,onSave,onPublish,publishingPostId}) {
+function Drafts({posts,destinations,accounts,onDelete,onSave,onPublish,publishingPostId}) {
   const [edits,setEdits]=useState({})
-  return <><PageHeader eyebrow="CONTENT LIBRARY" title="Drafts." description="Edit captions, publish to connected channels or remove content."/><section className="card"><div className="draft-list">{posts.map(post=><div className="draft-editor" key={post.id}><textarea rows="3" value={edits[post.id]??post.caption} onChange={e=>setEdits(v=>({...v,[post.id]:e.target.value}))}/><div className="draft-editor-footer"><span>{post.media_type||'Text post'} · {new Date(post.created_at).toLocaleDateString()} · {post.status}</span><div className="button-row"><button className="secondary-action" onClick={()=>onSave(post.id,edits[post.id]??post.caption)}><Save size={14}/> Save</button><button className="secondary-action" onClick={()=>onPublish(post.id)} disabled={publishingPostId===post.id}>{publishingPostId===post.id?'Publishing…':'Publish to Instagram'}</button><button className="danger-action" onClick={()=>onDelete(post)}><Trash2 size={14}/> Delete</button></div></div></div>)}{!posts.length&&<div className="empty-state">No drafts to show.</div>}</div></section></>
+  return <><PageHeader eyebrow="CONTENT LIBRARY" title="Drafts." description="Edit captions, publish to connected channels or remove content."/><section className="card"><div className="draft-list">{posts.map(post=><div className="draft-editor" key={post.id}><textarea rows="3" value={edits[post.id]??post.caption} onChange={e=>setEdits(v=>({...v,[post.id]:e.target.value}))}/><div className="draft-editor-footer"><span>{post.media_type||'Text post'} · {new Date(post.created_at).toLocaleDateString()} · {post.status}</span><div className="button-row"><button className="secondary-action" onClick={()=>onSave(post.id,edits[post.id]??post.caption)}><Save size={14}/> Save</button>{destinations.filter(d=>d.post_id===post.id&&d.platform==='instagram').map(d=>{const account=accounts.find(a=>a.id===d.social_account_id);return d.status==='published'?<span className="draft-status success-status" key={d.id}>{account?.username?'@'+account.username+' · ':''}Published</span>:<button key={d.id} className="secondary-action" onClick={()=>onPublish(post.id,d.id)} disabled={publishingPostId===post.id||!account}>{publishingPostId===post.id?'Publishing…':`Publish ${account?.username?'@'+account.username:'to Instagram'}`}</button>})}{!destinations.some(d=>d.post_id===post.id&&d.platform==='instagram')&&<span className="muted tiny">No Instagram destination selected</span>}<button className="danger-action" onClick={()=>onDelete(post)}><Trash2 size={14}/> Delete</button></div></div></div>)}{!posts.length&&<div className="empty-state">No drafts to show.</div>}</div></section></>
 }
 function CalendarView({posts,schedules,onSchedule,onCancel,busy,schedulePostId,setSchedulePostId,destinationId,setDestinationId,scheduleAt,setScheduleAt,destinations}) {
   const [scheduleRows,setScheduleRows]=useState([])
@@ -270,9 +297,9 @@ function HistoryView({logs,posts}) {
   return <><PageHeader eyebrow="ACTIVITY" title="Publishing history." description="Review publishing events and errors recorded by connected platforms."/><section className="card"><div className="history-list">{logs.map(log=><div className="simple-row" key={log.id}><div><strong>{postMap.get(log.post_id)?.caption||'Post activity'} · {log.platform}</strong><span>{new Date(log.created_at).toLocaleString()} · {log.message||'No additional details'}</span></div><span className={'draft-status '+(log.status==='published'?'success-status':'')}>{log.status}</span></div>)}{!logs.length&&<div className="empty-state">No publishing events have been recorded yet.</div>}</div></section></>
 }
 function Accounts({accounts,onConnect,onDisconnect,busy}) {
-  return <><PageHeader eyebrow="YOUR SOCIAL CHANNELS" title="Connected accounts." description="Manage multiple authorized social profiles. Never share your social passwords."/><div className="accounts-grid">{platforms.map(p=><article className="account-card card" key={p.id}><div className="account-card-top"><span className={'platform-mark '+p.id}>{p.mark}</span><span className="account-status pending">{accounts.filter(a=>a.platform===p.id&&a.account_status==='connected').length} connected</span></div><h2>{p.label}</h2><p className="muted small">{p.id==='instagram'?'Meta Unified Login for professional Instagram accounts.':p.id==='facebook'?'Facebook Page publishing integration.':'TikTok Content Posting API integration.'}</p>{accounts.filter(a=>a.platform===p.id).map(a=><div className="channel-row" key={a.id}><span>{a.username?'@'+a.username:a.display_name||a.platform_user_id}</span><button className="danger-action" onClick={()=>onDisconnect(a)}><Trash2 size={13}/> Disconnect</button></div>)}{p.id==='instagram'?<button className="primary-btn full" onClick={onConnect} disabled={busy}>Connect another Instagram <Instagram size={16}/></button>:<button className="secondary-btn full" disabled>Integration setup required</button>}</article>)}</div></>
+  return <><PageHeader eyebrow="YOUR SOCIAL CHANNELS" title="Connected accounts." description="Manage multiple authorized social profiles. Never share your social passwords."/><div className="accounts-grid">{platforms.map(p=><article className="account-card card" key={p.id}><div className="account-card-top"><span className={'platform-mark '+p.id}>{p.mark}</span><span className="account-status pending">{accounts.filter(a=>a.platform===p.id&&a.account_status==='connected').length} connected</span></div><h2>{p.label}</h2><p className="muted small">{p.id==='instagram'?'Meta Unified Login for professional Instagram accounts.':p.id==='facebook'?'Facebook Page publishing integration.':'TikTok Content Posting API integration.'}</p>{accounts.filter(a=>a.platform===p.id).map(a=><div className="channel-row" key={a.id}><span>{a.username?'@'+a.username:a.display_name||a.platform_user_id}</span><button className="danger-action" onClick={()=>onDisconnect(a)}><Trash2 size={13}/> Disconnect</button></div>)}{p.id==='instagram'?<button className="primary-btn full" onClick={onConnect} disabled={busy}>Connect another Instagram <Instagram size={16}/></button>:<div className="integration-block"><strong>Not connected yet</strong><span>{p.id==='facebook'?'Requires Facebook Login permissions, Page access and Meta review.':'Requires a TikTok developer app, Content Posting API access and approval.'}</span></div>}</article>)}</div></>
 }
-function SettingsView({profile,setProfile,settings,setSettings,onProfileSave,onSettingsSave,busy,email}) {
-  return <><PageHeader eyebrow="WORKSPACE PREFERENCES" title="Settings." description="Manage your profile, timezone and notification preferences."/><div className="dashboard-grid settings-grid"><form className="card" onSubmit={onProfileSave}><h2>Profile</h2><p className="muted small">Your account details.</p><label>Email address<input value={email} disabled/></label><label>Display name<input value={profile.display_name} onChange={e=>setProfile(p=>({...p,display_name:e.target.value}))} placeholder="Your name"/></label><label>Avatar URL<input value={profile.avatar_url} onChange={e=>setProfile(p=>({...p,avatar_url:e.target.value}))} placeholder="https://…"/></label><button className="primary-btn full" disabled={busy}>Save profile <Save size={15}/></button></form><form className="card" onSubmit={onSettingsSave}><h2>Preferences</h2><p className="muted small">Choose how your workspace behaves.</p><label>Timezone<select value={settings.timezone} onChange={e=>setSettings(s=>({...s,timezone:e.target.value}))}><option>Africa/Kigali</option><option>Africa/Nairobi</option><option>UTC</option><option>Europe/London</option></select></label>{[['email_notifications','Email notifications'],['publish_success_notifications','Successful publishing alerts'],['publish_failure_notifications','Failed publishing alerts'],['weekly_summary','Weekly summary']].map(([key,label])=><label className="toggle-row" key={key}><span>{label}</span><input type="checkbox" checked={!!settings[key]} onChange={e=>setSettings(s=>({...s,[key]:e.target.checked}))}/></label>)}<button className="primary-btn full" disabled={busy}>Save preferences <Save size={15}/></button></form></div><section className="card security-card"><h2>Security</h2><p className="muted small">Social access tokens are stored encrypted by the server. You can revoke a social connection from Connected accounts. Use a unique password for your FREE CROSSPOSTER account.</p></section></>
+function SettingsView({profile,setProfile,settings,setSettings,onProfileSave,onSettingsSave,onPasswordReset,busy,email}) {
+  return <><PageHeader eyebrow="WORKSPACE PREFERENCES" title="Settings." description="Manage your profile, timezone and notification preferences."/><div className="dashboard-grid settings-grid"><form className="card" onSubmit={onProfileSave}><h2>Profile</h2><p className="muted small">Your account details.</p><label>Email address<input value={email} disabled/></label><label>Display name<input value={profile.display_name} onChange={e=>setProfile(p=>({...p,display_name:e.target.value}))} placeholder="Your name"/></label><label>Avatar URL<input value={profile.avatar_url} onChange={e=>setProfile(p=>({...p,avatar_url:e.target.value}))} placeholder="https://…"/></label><button className="primary-btn full" disabled={busy}>Save profile <Save size={15}/></button></form><form className="card" onSubmit={onSettingsSave}><h2>Preferences</h2><p className="muted small">Choose how your workspace behaves.</p><label>Timezone<select value={settings.timezone} onChange={e=>setSettings(s=>({...s,timezone:e.target.value}))}><option>Africa/Kigali</option><option>Africa/Nairobi</option><option>UTC</option><option>Europe/London</option></select></label>{[['email_notifications','Email notifications'],['publish_success_notifications','Successful publishing alerts'],['publish_failure_notifications','Failed publishing alerts'],['weekly_summary','Weekly summary']].map(([key,label])=><label className="toggle-row" key={key}><span>{label}</span><input type="checkbox" checked={!!settings[key]} onChange={e=>setSettings(s=>({...s,[key]:e.target.checked}))}/></label>)}<button className="primary-btn full" disabled={busy}>Save preferences <Save size={15}/></button></form></div><section className="card security-card"><h2>Security</h2><p className="muted small">Social access tokens are stored encrypted by the server. You can revoke a social connection from Connected accounts. Use a unique password for your FREE CROSSPOSTER account.</p><button type="button" className="secondary-action" onClick={onPasswordReset}>Send password reset email</button><div className="settings-api-note"><strong>Platform API credentials</strong><span>Meta and TikTok app secrets stay in Supabase Edge Function secrets. They are never stored in browser settings or exposed in this page.</span></div></section></>
 }
 function SetupMessage(){return <main className="center-screen"><div className="setup-card"><span className="brand-icon">FC</span><h1>Connect your Supabase project</h1><p className="muted">Create a local <code>.env</code> file using <code>.env.example</code>, then add your Supabase URL and publishable key.</p></div></main>}
