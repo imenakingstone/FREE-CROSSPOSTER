@@ -31,16 +31,16 @@ On Windows PowerShell, use `npm.cmd install` and `npm.cmd run dev` if script exe
 Uses Meta Unified Login and Graph API publishing. A professional Business or Creator account must be selected and authorized. The OAuth account-discovery request and first real post still need a live user authorization test. The Meta app must have the necessary access and review approvals for non-test users.
 
 ### Facebook Pages
-The UI intentionally keeps Facebook publishing disabled until the Meta app has the Page permissions and Page access token flow required by Meta, including `pages_manage_posts`, `pages_read_engagement` and `pages_show_list`. Page publishing uses the Page feed endpoint and a Page access token. See [Meta Page Feed API](https://developers.facebook.com/docs/graph-api/reference/page/feed/).
+Facebook OAuth and Page publishing Edge Functions are deployed. The flow requests `pages_show_list`, `pages_read_engagement`, and `pages_manage_posts`, discovers Pages available to the authorizing user, stores each Page access token encrypted, and supports text, image, and video Page posts. The Meta app must have Facebook Login configured, the callback URL allowlisted, and the required permissions approved for non-test users. See [Meta Page Feed API](https://developers.facebook.com/docs/graph-api/reference/page/feed/).
 
 ### TikTok
-The UI intentionally keeps TikTok publishing disabled until a TikTok developer app has Content Posting API access, OAuth scopes and Direct Post audit approval. TikTok unaudited clients are restricted to private viewing. See [TikTok Content Posting API](https://developers.tiktok.com/docs/en/content-posting-api-get-started).
+TikTok OAuth and Direct Post Edge Functions are deployed. The integration requests `user.info.basic` and `video.publish`, securely stores access/refresh tokens, uploads video files using TikTok's FILE_UPLOAD flow, and checks the publish status endpoint. TikTok photo posts require a publicly accessible URL on a domain verified in the TikTok developer app; this integration currently enables video publishing only. The TikTok app must have the Content Posting API product and Direct Post enabled, and the `video.publish` scope approved. Unaudited clients are restricted to private posts. See [TikTok Content Posting API](https://developers.tiktok.com/docs/en/content-posting-api-get-started).
 
 ## Scheduler
 
 The Supabase project has a Cron job named `free-crossposter-scheduler` that invokes the `scheduled-publisher` Edge Function every minute. The function authenticates the call with a high-entropy token stored in Supabase Vault and a database-side hash; it claims due jobs safely, retries transient failures up to three attempts and writes final destination status changes.
 
-Only Instagram is currently enabled in the worker. Facebook and TikTok destinations are rejected until their OAuth and publishing integrations are approved and deployed.
+The scheduled worker currently processes Instagram destinations only. Facebook and TikTok manual publishing functions are deployed; scheduled publishing for those platforms is a separate remaining enhancement.
 
 ## Notifications
 
