@@ -83,7 +83,7 @@ export default function App() {
   }
 
   async function connectInstagram() {
-    setNotice('Direct Instagram login is being configured. This button will use Instagram authorization, not Facebook Login. No account has been connected yet.')
+    setNotice('Instagram connection is not ready yet. We are building the direct Instagram authorization flow. You will not be sent through Facebook Login.')
   }
 
   function togglePlatform(id) {
@@ -196,15 +196,23 @@ export default function App() {
   }
 
   return (
-    <main className="dashboard">
-      <header className="topbar">
-        <div className="brand"><span className="brand-icon">FC</span> FREE CROSSPOSTER</div>
-        <div className="user-area"><span className="user-email">{session.user.email}</span><button className="icon-btn" onClick={handleSignOut} title="Sign out"><LogOut size={18} /></button></div>
-      </header>
-      <nav className="workspace-nav">
-        <button className={activeView === 'publishing' ? 'active' : ''} onClick={() => setActiveView('publishing')}>Publishing workspace</button>
-        <button className={activeView === 'accounts' ? 'active' : ''} onClick={() => setActiveView('accounts')}><Link2 size={15} /> Connected accounts</button>
-      </nav>
+    <main className="dashboard socialync-shell">
+      <aside className="app-sidebar">
+        <div className="brand"><span className="brand-icon">FC</span><span>FREE CROSSPOSTER</span></div>
+        <p className="sidebar-label">WORKSPACE</p>
+        <button className={activeView === 'publishing' ? 'sidebar-link active' : 'sidebar-link'} onClick={() => setActiveView('publishing')}><ImagePlus size={17} /> Overview</button>
+        <button className={activeView === 'publishing' ? 'sidebar-link' : 'sidebar-link'} onClick={() => setActiveView('publishing')}><Send size={17} /> Create post</button>
+        <button className={activeView === 'accounts' ? 'sidebar-link active' : 'sidebar-link'} onClick={() => setActiveView('accounts')}><Link2 size={17} /> Connected accounts</button>
+        <div className="sidebar-bottom">
+          <div className="sidebar-user"><span className="avatar">{(session.user.email || 'U').slice(0,1).toUpperCase()}</span><span className="sidebar-user-email">{session.user.email}</span></div>
+          <button className="sidebar-signout" onClick={handleSignOut}><LogOut size={16} /> Sign out</button>
+        </div>
+      </aside>
+      <section className="app-main">
+        <header className="topbar">
+          <div><span className="topbar-kicker">YOUR WORKSPACE</span><strong>{activeView === 'accounts' ? 'Connected accounts' : 'Publishing overview'}</strong></div>
+          <div className="user-area"><span className="user-email">{session.user.email}</span><button className="icon-btn" onClick={handleSignOut} title="Sign out"><LogOut size={18} /></button></div>
+        </header>
       <div className="dashboard-content">
         {activeView === 'accounts' ? <ConnectedAccounts onConnect={connectInstagram} connectBusy={connectBusy} notice={notice} /> : <>
           <div className="welcome-row"><div><p className="eyebrow">YOUR PUBLISHING WORKSPACE</p><h1>Good to see you.</h1><p className="muted">Create once. Keep your content organized.</p></div><div className="status-pill"><span /> Workspace ready</div></div>
@@ -231,6 +239,7 @@ export default function App() {
           <section className="card recent-card"><div className="section-heading"><div><h2>Your recent drafts</h2><p className="muted small">Posts saved in your workspace.</p></div><span className="step-label">{posts.length} ITEMS</span></div>{posts.length === 0 ? <div className="empty-state">No drafts yet. Create your first post above.</div> : <div className="draft-list">{posts.map(post => <DraftRow key={post.id} post={post} getUrl={getPrivateMediaUrl} />)}</div>}</section>
         </>}
       </div>
+      </section>
     </main>
   )
 }
