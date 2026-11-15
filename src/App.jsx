@@ -336,7 +336,7 @@ function Drafts({posts,destinations,accounts,onDelete,onSave,onPublish,onAssignA
                   </select>}
                   {destination.status==='published'?<span className="draft-status success-status">Published</span>
                   :destination.status==='scheduled'||destination.status==='processing'||destination.status==='publishing'?<span className="draft-status">{destination.status}</span>
-                  :<button className="secondary-action" onClick={()=>onPublish(post.id,destination.id,platform)} disabled={publishingPostId===post.id||!account}>{publishingPostId===post.id?'Publishing…':'Publish '+label}</button>}
+                  :<button className="secondary-action" onClick={()=>onPublish(post.id,destination.id,platform)} disabled={publishingPostId===post.id||!account||(platform==='tiktok'&&post.media_type!=='video')} title={platform==='tiktok'&&post.media_type!=='video'?'TikTok Direct Post currently supports video only.':''}>{publishingPostId===post.id?'Publishing…':'Publish '+label}</button>}
                 </div>
               })}
               {!targets.length&&<span className="muted tiny">No destinations selected</span>}
