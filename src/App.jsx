@@ -92,7 +92,7 @@ export default function App() {
     setConnectBusy(true)
     setNotice('')
     try {
-      const { data, error } = await supabase.functions.invoke('instagram-oauth-start', { body: {} })
+      const { data, error } = await supabase.functions.invoke('meta-oauth-start', { body: {} })
       if (error) throw error
       if (!data?.url) throw new Error(data?.error || 'Instagram authorization could not start.')
       window.location.assign(data.url)
@@ -292,8 +292,8 @@ function ConnectedAccounts({ onConnect, connectBusy, notice, socialAccounts = []
     {
       id: 'instagram',
       name: 'Instagram',
-      description: 'Connect a Business or Creator account directly with Instagram.',
-      detail: 'Instagram login · No Facebook Page required',
+      description: 'Connect a professional Instagram account through Meta's Unified Login.',
+      detail: 'Unified Login · Instagram or Facebook sign-in · No Facebook Page required',
       mark: 'IG',
       action: 'Connect Instagram',
       available: true,
