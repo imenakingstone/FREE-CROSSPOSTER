@@ -210,6 +210,11 @@ export default function App() {
     if (error) setNotice(error.message)
     else { await supabase.from('post_destinations').update({ status: 'pending' }).eq('id', item.destination_id).eq('user_id', session.user.id); setNotice('Schedule cancelled.'); await refreshWorkspace() }
   }
+  async function assignDestinationAccount(destinationId, accountId) {
+    const { error } = await supabase.from('post_destinations').update({ social_account_id: accountId, status: 'pending', updated_at: new Date().toISOString() }).eq('id', destinationId).eq('user_id', session.user.id)
+    if (error) setNotice(error.message)
+    else { setNotice('Instagram account assigned to this post.'); await loadDestinations() }
+  }
   async function disconnectAccount(account) {
     if (!window.confirm(`Disconnect ${account.platform} account ${account.username ? '@' + account.username : ''}?`)) return
     const { error } = await supabase.from('social_accounts').delete().eq('id', account.id).eq('user_id', session.user.id)
@@ -262,7 +267,7 @@ export default function App() {
       <div className="dashboard-content">
         {activeView === 'overview' && <Overview posts={posts} accounts={socialAccounts} schedules={schedules} logs={logs} onNavigate={setActiveView} />}
         {activeView === 'create' && <CreatePost caption={caption} setCaption={setCaption} file={file} setFile={setFile} selectedPlatforms={selectedPlatforms} setSelectedPlatforms={setSelectedPlatforms} onSubmit={createDraft} busy={busy} />}
-        {activeView === 'drafts' && <Drafts posts={draftPosts} destinations={postDestinations} accounts={socialAccounts} onDelete={deleteDraft} onSave={saveCaption} onPublish={publishInstagram} publishingPostId={publishingPostId} />}
+        {activeView === 'drafts' && <Drafts posts={draftPosts} destinations={postDestinations} accounts={socialAccounts} onDelete={deleteDraft} onSave={saveCaption} onPublish={publishInstagram} onAssignAccount={assignDestinationAccount} publishingPostId={publishingPostId} />}
         {activeView === 'calendar' && <CalendarView posts={posts} schedules={schedules} onSchedule={schedulePost} onCancel={cancelSchedule} busy={busy} schedulePostId={schedulePostId} setSchedulePostId={setSchedulePostId} destinationId={scheduleDestinationId} setDestinationId={setScheduleDestinationId} scheduleAt={scheduleAt} setScheduleAt={setScheduleAt} destinations={destRows} />}
         {activeView === 'history' && <HistoryView logs={logs} posts={posts} />}
         {activeView === 'accounts' && <Accounts accounts={socialAccounts} onConnect={connectInstagram} onDisconnect={disconnectAccount} busy={busy} />}
@@ -285,15 +290,107 @@ function Overview({posts,accounts,schedules,logs,onNavigate}) {
 function CreatePost({caption,setCaption,file,setFile,selectedPlatforms,setSelectedPlatforms,onSubmit,busy}) {
   return <><PageHeader eyebrow="CONTENT STUDIO" title="Create a post." description="Prepare your content once and choose where it should go."/><div className="card composer"><form onSubmit={onSubmit}><label>Caption<textarea rows="6" value={caption} onChange={e=>setCaption(e.target.value)} placeholder="Write your caption…"/></label><label className="upload-zone"><input type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm" onChange={e=>setFile(e.target.files?.[0]||null)}/>{file?<><div className="upload-icon"><Video/></div><strong>{file.name}</strong><span>{(file.size/1024/1024).toFixed(1)} MB · click to replace</span></>:<><div className="upload-icon"><ImagePlus/></div><strong>Add a photo or video</strong><span>JPEG, PNG, WebP, GIF, MP4, MOV or WebM · max 50 MB</span></>}</label><div className="destination-block"><div className="destination-title"><span>Choose destinations</span><span className="muted tiny">Publishing requires an authorized account</span></div><div className="platform-list">{platforms.map(p=><button type="button" key={p.id} disabled={p.id!=='instagram'} className={'platform-choice '+(selectedPlatforms.includes(p.id)?'selected':'')+(p.id!=='instagram'?' platform-disabled':'')} onClick={()=>setSelectedPlatforms(current=>current.includes(p.id)?current.filter(x=>x!==p.id):[...current,p.id])}><span className={'platform-mark '+p.id}>{p.mark}</span>{p.label}{p.id!=='instagram'&&<small>API setup required</small>}<span className="check">{selectedPlatforms.includes(p.id)?'✓':p.id==='instagram'?'+':'—'}</span></button>)}</div></div><button className="primary-btn full" disabled={busy}>{busy?'Saving…':'Save post draft'} <Send size={16}/></button></form></div></>
 }
-function Drafts({posts,destinations,accounts,onDelete,onSave,onPublish,publishingPostId}) {
+function Drafts({posts,destinations,accounts,onDelete,onSave,onPublish,onAssignAccount,publishingPostId}) {
   const [edits,setEdits]=useState({})
-  return <><PageHeader eyebrow="CONTENT LIBRARY" title="Drafts." description="Edit captions, publish to connected channels or remove content."/><section className="card"><div className="draft-list">{posts.map(post=><div className="draft-editor" key={post.id}><textarea rows="3" value={edits[post.id]??post.caption} onChange={e=>setEdits(v=>({...v,[post.id]:e.target.value}))}/><div className="draft-editor-footer"><span>{post.media_type||'Text post'} · {new Date(post.created_at).toLocaleDateString()} · {post.status}</span><div className="button-row"><button className="secondary-action" onClick={()=>onSave(post.id,edits[post.id]??post.caption)}><Save size={14}/> Save</button>{destinations.filter(d=>d.post_id===post.id&&d.platform==='instagram').map(d=>{const account=accounts.find(a=>a.id===d.social_account_id);return d.status==='published'?<span className="draft-status success-status" key={d.id}>{account?.username?'@'+account.username+' · ':''}Published</span>:<button key={d.id} className="secondary-action" onClick={()=>onPublish(post.id,d.id)} disabled={publishingPostId===post.id||!account}>{publishingPostId===post.id?'Publishing…':`Publish ${account?.username?'@'+account.username:'to Instagram'}`}</button>})}{!destinations.some(d=>d.post_id===post.id&&d.platform==='instagram')&&<span className="muted tiny">No Instagram destination selected</span>}<button className="danger-action" onClick={()=>onDelete(post)}><Trash2 size={14}/> Delete</button></div></div></div>)}{!posts.length&&<div className="empty-state">No drafts to show.</div>}</div></section></>
+  const connectedAccounts=accounts.filter(account=>account.platform==='instagram'&&account.account_status==='connected')
+  return <>
+    <PageHeader eyebrow="CONTENT LIBRARY" title="Drafts." description="Edit captions, choose an Instagram account and publish your content."/>
+    <section className="card">
+      <div className="draft-list">
+        {posts.map(post=>{
+          const targets=destinations.filter(item=>item.post_id===post.id)
+          const instagramTargets=targets.filter(item=>item.platform==='instagram')
+          return <article className="draft-editor" key={post.id}>
+            <textarea rows="3" value={edits[post.id]??post.caption} onChange={event=>setEdits(value=>({...value,[post.id]:event.target.value}))}/>
+            <div className="draft-editor-footer">
+              <span>{post.media_type||'Text post'} · {new Date(post.created_at).toLocaleDateString()} · {post.status}</span>
+              <div className="button-row">
+                <button className="secondary-action" onClick={()=>onSave(post.id,edits[post.id]??post.caption)}><Save size={14}/> Save</button>
+                {instagramTargets.map(destination=>{
+                  const account=accounts.find(item=>item.id===destination.social_account_id&&item.account_status==='connected')
+                  return <div className="draft-target" key={destination.id}>
+                    {account
+                      ? <span className="draft-target-name">@{account.username||'Instagram account'}</span>
+                      : <select aria-label="Choose Instagram account" value="" onChange={event=>event.target.value&&onAssignAccount(destination.id,event.target.value)} disabled={!connectedAccounts.length}>
+                          <option value="">{connectedAccounts.length?'Choose Instagram account…':'Connect Instagram first'}</option>
+                          {connectedAccounts.map(item=><option key={item.id} value={item.id}>{item.username?'@'+item.username:item.display_name||item.platform_user_id}</option>)}
+                        </select>}
+                    {destination.status==='published'
+                      ? <span className="draft-status success-status">Published</span>
+                      : destination.status==='scheduled'||destination.status==='processing'
+                        ? <span className="draft-status">{destination.status}</span>
+                        : <button className="secondary-action" onClick={()=>onPublish(post.id,destination.id)} disabled={publishingPostId===post.id||!account}>
+                            {publishingPostId===post.id?'Publishing…':'Publish'}
+                          </button>}
+                  </div>
+                })}
+                {!instagramTargets.length&&<span className="muted tiny">No Instagram destination selected</span>}
+                <button className="danger-action" onClick={()=>onDelete(post)}><Trash2 size={14}/> Delete</button>
+              </div>
+            </div>
+          </article>
+        })}
+        {!posts.length&&<div className="empty-state">No drafts to show.</div>}
+      </div>
+    </section>
+  </>
 }
+
 function CalendarView({posts,schedules,onSchedule,onCancel,busy,schedulePostId,setSchedulePostId,destinationId,setDestinationId,scheduleAt,setScheduleAt,destinations}) {
   const [scheduleRows,setScheduleRows]=useState([])
-  useEffect(()=>{let alive=true;async function load(){if(!schedules.length){setScheduleRows([]);return}const ids=schedules.map(s=>s.destination_id);const {data:dest}=await supabase.from('post_destinations').select('id,post_id,platform').in('id',ids);const map=new Map((dest||[]).map(d=>[d.id,d]));const postIds=[...new Set((dest||[]).map(d=>d.post_id))];const {data:postData}=postIds.length?await supabase.from('posts').select('id,caption').in('id',postIds):{data:[]};const postMap=new Map((postData||[]).map(p=>[p.id,p]));if(alive)setScheduleRows(schedules.map(s=>({...s,destination:map.get(s.destination_id),post:postMap.get(map.get(s.destination_id)?.post_id)})))}load();return()=>{alive=false}},[schedules])
-  return <><PageHeader eyebrow="PUBLISHING PLANNER" title="Calendar." description="Schedule individual destinations and review upcoming posts."/><div className="dashboard-grid calendar-grid"><section className="card"><h2>Schedule a post</h2><form onSubmit={onSchedule}><label>Choose a draft<select required value={schedulePostId} onChange={e=>{setSchedulePostId(e.target.value);setDestinationId('')}}><option value="">Select a draft…</option>{posts.filter(p=>p.status!=='published').map(p=><option key={p.id} value={p.id}>{(p.caption||'Media-only post').slice(0,65)}</option>)}</select></label><label>Destination<select required value={destinationId} onChange={e=>setDestinationId(e.target.value)}><option value="">Select destination…</option>{destinations.filter(d=>d.platform==='instagram'&&d.social_account_id).map(d=><option key={d.id} value={d.id}>Instagram · {d.status}</option>)}</select></label><label>Date and time<input required type="datetime-local" value={scheduleAt} onChange={e=>setScheduleAt(e.target.value)}/></label><button className="primary-btn full" disabled={busy||!schedulePostId||!destinationId||!scheduleAt}>Save schedule <Clock3 size={15}/></button></form><p className="fine-print">Instagram schedules are checked automatically every minute. Keep the connected Instagram account authorized and the post media available.</p></section><section className="card"><div className="section-heading"><div><h2>Upcoming schedule</h2><p className="muted small">{scheduleRows.length} scheduled destinations</p></div></div>{scheduleRows.map(row=><div className="simple-row" key={row.id}><div><strong>{row.post?.caption||'Scheduled post'}</strong><span>{row.destination?.platform||'Social'} · {new Date(row.scheduled_at).toLocaleString()}</span></div><button className="danger-action" onClick={()=>onCancel(row)}><X size={14}/> Cancel</button></div>)}{!scheduleRows.length&&<div className="empty-state">Nothing scheduled yet.</div>}</section></div></>
+  useEffect(()=>{
+    let alive=true
+    async function load(){
+      const upcoming=schedules.filter(item=>['scheduled','processing'].includes(item.status))
+      if(!upcoming.length){setScheduleRows([]);return}
+      const ids=upcoming.map(item=>item.destination_id)
+      const {data:dest}=await supabase.from('post_destinations').select('id,post_id,platform').in('id',ids)
+      const destinationMap=new Map((dest||[]).map(item=>[item.id,item]))
+      const postIds=[...new Set((dest||[]).map(item=>item.post_id))]
+      const {data:postData}=postIds.length
+        ? await supabase.from('posts').select('id,caption').in('id',postIds)
+        : {data:[]}
+      const postMap=new Map((postData||[]).map(item=>[item.id,item]))
+      if(alive)setScheduleRows(upcoming.map(item=>({...item,destination:destinationMap.get(item.destination_id),post:postMap.get(destinationMap.get(item.destination_id)?.post_id)})))
+    }
+    load()
+    return()=>{alive=false}
+  },[schedules])
+  return <>
+    <PageHeader eyebrow="PUBLISHING PLANNER" title="Calendar." description="Schedule Instagram destinations and review upcoming posts."/>
+    <div className="dashboard-grid calendar-grid">
+      <section className="card">
+        <h2>Schedule a post</h2>
+        <form onSubmit={onSchedule}>
+          <label>Choose a draft
+            <select required value={schedulePostId} onChange={event=>{setSchedulePostId(event.target.value);setDestinationId('')}}>
+              <option value="">Select a draft…</option>
+              {posts.filter(post=>post.status!=='published').map(post=><option key={post.id} value={post.id}>{(post.caption||'Media-only post').slice(0,65)}</option>)}
+            </select>
+          </label>
+          <label>Instagram account
+            <select required value={destinationId} onChange={event=>setDestinationId(event.target.value)}>
+              <option value="">Select a connected account…</option>
+              {destinations.filter(item=>item.platform==='instagram'&&item.social_account_id).map(item=><option key={item.id} value={item.id}>Instagram · {item.status}</option>)}
+            </select>
+          </label>
+          <label>Date and time<input required type="datetime-local" value={scheduleAt} onChange={event=>setScheduleAt(event.target.value)}/></label>
+          <button className="primary-btn full" disabled={busy||!schedulePostId||!destinationId||!scheduleAt}>Save schedule <Clock3 size={15}/></button>
+        </form>
+        <p className="fine-print">Instagram schedules are checked automatically every minute. Keep the connected account authorized and the post media available.</p>
+      </section>
+      <section className="card">
+        <div className="section-heading"><div><h2>Upcoming schedule</h2><p className="muted small">{scheduleRows.length} scheduled destinations</p></div></div>
+        {scheduleRows.map(row=><div className="simple-row" key={row.id}>
+          <div><strong>{row.post?.caption||'Scheduled post'}</strong><span>{row.destination?.platform||'Instagram'} · {new Date(row.scheduled_at).toLocaleString()} · {row.status}</span></div>
+          {row.status==='scheduled'&&<button className="danger-action" onClick={()=>onCancel(row)}><X size={14}/> Cancel</button>}
+        </div>)}
+        {!scheduleRows.length&&<div className="empty-state">Nothing scheduled yet.</div>}
+      </section>
+    </div>
+  </>
 }
+
 function HistoryView({logs,posts}) {
   const postMap=new Map(posts.map(p=>[p.id,p]))
   return <><PageHeader eyebrow="ACTIVITY" title="Publishing history." description="Review publishing events and errors recorded by connected platforms."/><section className="card"><div className="history-list">{logs.map(log=><div className="simple-row" key={log.id}><div><strong>{postMap.get(log.post_id)?.caption||'Post activity'} · {log.platform}</strong><span>{new Date(log.created_at).toLocaleString()} · {log.message||'No additional details'}</span></div><span className={'draft-status '+(log.status==='published'?'success-status':'')}>{log.status}</span></div>)}{!logs.length&&<div className="empty-state">No publishing events have been recorded yet.</div>}</div></section></>
