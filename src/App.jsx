@@ -23,6 +23,7 @@ export default function App() {
   const [saving, setSaving] = useState(false)
   const [posts, setPosts] = useState([])
   const [activeView, setActiveView] = useState('publishing')
+  const [connectBusy, setConnectBusy] = useState(false)
 
   useEffect(() => {
     if (!supabase) { setLoading(false); return }
@@ -79,6 +80,20 @@ export default function App() {
   async function handleSignOut() {
     await supabase.auth.signOut()
     setPosts([])
+  }
+
+  async function connectInstagram() {
+    setConnectBusy(true)
+    setNotice('')
+    try {
+      const { data, error } = await supabase.functions.invoke('meta-oauth-start', { body: {} })
+      if (error) throw error
+      if (!data?.url) throw new Error('Meta did not return a login URL. Please try again.')
+      window.location.assign(data.url)
+    } catch (error) {
+      setNotice(error.message || 'Could not start Instagram connection.')
+      setConnectBusy(false)
+    }
   }
 
   function togglePlatform(id) {
@@ -201,7 +216,7 @@ export default function App() {
         <button className={activeView === 'instagram' ? 'active' : ''} onClick={() => setActiveView('instagram')}><Instagram size={15} /> Instagram & Shop setup</button>
       </nav>
       <div className="dashboard-content">
-        {activeView === 'instagram' ? <InstagramSetup /> : <>
+        {activeView === 'instagram' ? <InstagramSetup onConnect={connectInstagram} connectBusy={connectBusy} notice={notice} /> : <>
           <div className="welcome-row"><div><p className="eyebrow">YOUR PUBLISHING WORKSPACE</p><h1>Good to see you.</h1><p className="muted">Create once. Keep your content organized.</p></div><div className="status-pill"><span /> Workspace ready</div></div>
           <div className="dashboard-grid">
             <section className="composer card">
@@ -230,7 +245,7 @@ export default function App() {
   )
 }
 
-function InstagramSetup() {
+function InstagramSetup({ onConnect, connectBusy, notice }) {
   const steps = [
     { title: 'Switch Instagram to a professional account', detail: 'Use a Business or Creator account. Personal accounts cannot use the Instagram professional publishing APIs.', link: 'https://www.instagram.com/accounts/convert_to_professional_account/', label: 'Open Instagram settings' },
     { title: 'Connect Instagram to a Facebook Page', detail: 'For the Facebook Login API route and many Commerce setups, connect the Instagram account to the correct Facebook Page. The newer Instagram Login API can publish without a linked Page, so this is not required for every publishing connection.', link: 'https://business.facebook.com/latest/settings/business_assets', label: 'Open business assets' },
@@ -241,7 +256,7 @@ function InstagramSetup() {
   ]
   return <div className="ig-setup-page">
     <div className="welcome-row"><div><p className="eyebrow">META BUSINESS CONNECTION</p><h1>Set up Instagram.</h1><p className="muted">Prepare your professional account, business assets, catalog and app permissions in the right order.</p></div><div className="status-pill pending-pill"><span /> Setup guide · not connected</div></div>
-    <section className="ig-hero card"><div className="ig-hero-icon"><Instagram size={27} /></div><div><p className="eyebrow">INSTAGRAM PROFESSIONAL</p><h2>Connect the account you want to publish from</h2><p className="muted small">FREE CROSSPOSTER does not have Meta OAuth credentials or an approved publishing connection yet. This page helps you prepare the account; it does not claim that your account or shop is connected.</p></div><a className="outline-link" href="https://www.instagram.com/" target="_blank" rel="noreferrer">Open Instagram <ExternalLink size={14} /></a></section>
+    <section className="ig-hero card"><div className="ig-hero-icon"><Instagram size={27} /></div><div><p className="eyebrow">INSTAGRAM PROFESSIONAL</p><h2>Connect the account you want to publish from</h2><p className="muted small">FREE CROSSPOSTER does not have Meta OAuth credentials or an approved publishing connection yet. This page helps you prepare the account; it does not claim that your account or shop is connected.</p></div><button className="primary-btn ig-connect-btn" type="button" onClick={onConnect} disabled={connectBusy}>{connectBusy ? 'Opening Meta login…' : 'Connect Instagram'} <ArrowUpRight size={16} /></button></section>{notice && <p className="notice">{notice}</p>}
     <div className="ig-setup-grid">
       <section className="card ig-checklist"><div className="section-heading"><div><h2>Instagram setup checklist</h2><p className="muted small">Complete these steps in Meta. Your changes are made in their official tools.</p></div><span className="step-label">ACCOUNT SETUP</span></div>
         {steps.map((step, i) => <article className="ig-step" key={step.title}><div className="ig-step-number">{String(i + 1).padStart(2, '0')}</div><div className="ig-step-copy"><h3>{step.title}</h3><p className="muted small">{step.detail}</p><a href={step.link} target="_blank" rel="noreferrer">{step.label} <ExternalLink size={13} /></a></div></article>)}
