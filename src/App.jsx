@@ -25,6 +25,7 @@ export default function App() {
   const [activeView, setActiveView] = useState('publishing')
   const [connectBusy, setConnectBusy] = useState(false)
   const [socialAccounts, setSocialAccounts] = useState([])
+  const [publishingPostId, setPublishingPostId] = useState(null)
 
   useEffect(() => {
     if (!supabase) { setLoading(false); return }
@@ -98,6 +99,23 @@ export default function App() {
     } catch (error) {
       setNotice(error.message || 'Could not start Instagram authorization.')
       setConnectBusy(false)
+    }
+  }
+
+  async function publishInstagram(postId) {
+    setPublishingPostId(postId)
+    setNotice('')
+    try {
+      const { data, error } = await supabase.functions.invoke('instagram-publish', { body: { post_id: postId } })
+      if (error) throw error
+      if (data?.error) throw new Error(data.error)
+      setNotice('Published successfully to Instagram.')
+      await loadPosts()
+    } catch (error) {
+      setNotice(error.message || 'Instagram publishing failed.')
+      await loadPosts()
+    } finally {
+      setPublishingPostId(null)
     }
   }
 
@@ -261,7 +279,7 @@ export default function App() {
               <section className="card privacy-card"><div className="privacy-icon"><ShieldCheck /></div><h3>Private by design</h3><p className="muted small">Your uploaded files live in a private storage bucket. Access is limited to your signed-in account.</p></section>
             </aside>
           </div>
-          <section className="card recent-card"><div className="section-heading"><div><h2>Your recent drafts</h2><p className="muted small">Posts saved in your workspace.</p></div><span className="step-label">{posts.length} ITEMS</span></div>{posts.length === 0 ? <div className="empty-state">No drafts yet. Create your first post above.</div> : <div className="draft-list">{posts.map(post => <DraftRow key={post.id} post={post} getUrl={getPrivateMediaUrl} />)}</div>}</section>
+          <section className="card recent-card"><div className="section-heading"><div><h2>Your recent drafts</h2><p className="muted small">Posts saved in your workspace.</p></div><span className="step-label">{posts.length} ITEMS</span></div>{posts.length === 0 ? <div className="empty-state">No drafts yet. Create your first post above.</div> : <div className="draft-list">{posts.map(post => <DraftRow key={post.id} post={post} getUrl={getPrivateMediaUrl} onPublish={publishInstagram} publishing={publishingPostId === post.id} />)}</div>}</section>
         </>}
       </div>
       </section>
@@ -339,7 +357,7 @@ function ConnectedAccounts({ onConnect, connectBusy, notice, socialAccounts = []
   </div>
 }
 
-function DraftRow({ post, getUrl }) {
+function DraftRow({ post, getUrl, onPublish, publishing }) {
   const [url, setUrl] = useState(null)
   useEffect(() => {
     let active = true
@@ -350,6 +368,7 @@ function DraftRow({ post, getUrl }) {
     <div className="draft-thumb">{url && post.media_type === 'image' ? <img src={url} alt="Post media" /> : post.media_type === 'video' ? <Video size={19} /> : <ImagePlus size={19} />}</div>
     <div className="draft-info"><strong>{post.caption || 'Media-only post'}</strong><span>{new Date(post.created_at).toLocaleString()} · {post.media_type || 'No media'}</span></div>
     <span className="draft-status">{post.status}</span>
+    {post.status !== 'published' && <button className="secondary-btn" type="button" onClick={() => onPublish(post.id)} disabled={publishing}>{publishing ? 'Publishing…' : 'Publish to Instagram'}</button>}
   </div>
 }
 
