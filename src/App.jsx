@@ -4,7 +4,6 @@ import { LayoutDashboard, CalendarDays, FileText, History, Link2, Settings, LogO
 
 const platforms = [
   { id: 'instagram', label: 'Instagram', mark: 'IG' },
-  { id: 'facebook', label: 'Facebook', mark: 'f' },
   { id: 'tiktok', label: 'TikTok', mark: '♪' },
 ]
 const navItems = [
@@ -162,7 +161,7 @@ export default function App() {
       const { data, error } = await supabase.functions.invoke(platform + '-publish', { body: { post_id: postId, destination_id: destinationId } })
       if (error) throw error
       if (data?.error) throw new Error(data.error)
-      setNotice(platform === 'tiktok' ? 'TikTok accepted the video upload. Check TikTok for final processing status.' : 'Facebook confirmed the post was published.')
+      setNotice(platform === 'tiktok' ? 'TikTok accepted the video upload. Check TikTok for final processing status.' : platform + ' confirmed the post was published.')
       await refreshWorkspace()
     } catch (error) { setNotice(error.message || (platform + ' publishing failed.')); await refreshWorkspace() }
     finally { setPublishingPostId(null) }
@@ -300,7 +299,7 @@ export default function App() {
         {activeView === 'drafts' && <Drafts posts={draftPosts} destinations={postDestinations} accounts={socialAccounts} onDelete={deleteDraft} onSave={saveCaption} onPublish={publishDestination} onAssignAccount={assignDestinationAccount} publishingPostId={publishingPostId} />}
         {activeView === 'calendar' && <CalendarView posts={posts} schedules={schedules} onSchedule={schedulePost} onCancel={cancelSchedule} busy={busy} schedulePostId={schedulePostId} setSchedulePostId={setSchedulePostId} destinationId={scheduleDestinationId} setDestinationId={setScheduleDestinationId} scheduleAt={scheduleAt} setScheduleAt={setScheduleAt} destinations={destRows} />}
         {activeView === 'history' && <HistoryView logs={logs} posts={posts} />}
-        {activeView === 'accounts' && <Accounts accounts={socialAccounts} onConnect={connectInstagram} onConnectFacebook={() => connectPlatform('facebook')} onConnectTikTok={() => connectPlatform('tiktok')} onDisconnect={disconnectAccount} busy={busy} />}
+        {activeView === 'accounts' && <Accounts accounts={socialAccounts} onConnect={connectInstagram} onConnectTikTok={() => connectPlatform('tiktok')} onDisconnect={disconnectAccount} busy={busy} />}
         {activeView === 'settings' && <SettingsView profile={profile} setProfile={setProfile} settings={settings} setSettings={setSettings} onProfileSave={saveProfile} onSettingsSave={saveSettings} onPasswordReset={sendPasswordReset} busy={busy} email={session.user.email} />}
         {notice && <p className="notice workspace-notice">{notice}</p>}
       </div>
@@ -326,7 +325,7 @@ function Drafts({posts,destinations,accounts,onDelete,onSave,onPublish,onAssignA
     <PageHeader eyebrow="CONTENT LIBRARY" title="Drafts." description="Edit captions, assign each destination account and publish."/>
     <section className="card"><div className="draft-list">
       {posts.map(post=>{
-        const targets=destinations.filter(item=>item.post_id===post.id)
+        const targets=destinations.filter(item=>item.post_id===post.id&&['instagram','tiktok'].includes(item.platform))
         return <article className="draft-editor" key={post.id}>
           <textarea rows="3" value={edits[post.id]??post.caption} onChange={event=>setEdits(value=>({...value,[post.id]:event.target.value}))}/>
           <div className="draft-editor-footer"><span>{post.media_type||'Text post'} · {new Date(post.created_at).toLocaleDateString()} · {post.status}</span>
@@ -336,7 +335,7 @@ function Drafts({posts,destinations,accounts,onDelete,onSave,onPublish,onAssignA
                 const platform=destination.platform
                 const linked=accounts.filter(item=>item.platform===platform&&item.account_status==='connected')
                 const account=accounts.find(item=>item.id===destination.social_account_id&&item.account_status==='connected')
-                const label=platform==='instagram'?'Instagram':platform==='facebook'?'Facebook Page':'TikTok'
+                const label=platform==='instagram'?'Instagram':'TikTok'
                 return <div className="draft-target" key={destination.id}>
                   {account?<span className="draft-target-name">{account.username?'@'+account.username:account.display_name||label}</span>
                   :<select aria-label={'Choose '+label+' account'} value="" onChange={event=>event.target.value&&onAssignAccount(destination.id,event.target.value)} disabled={!linked.length}>
@@ -417,19 +416,25 @@ function HistoryView({logs,posts}) {
   const postMap=new Map(posts.map(p=>[p.id,p]))
   return <><PageHeader eyebrow="ACTIVITY" title="Publishing history." description="Review publishing events and errors recorded by connected platforms."/><section className="card"><div className="history-list">{logs.map(log=><div className="simple-row" key={log.id}><div><strong>{postMap.get(log.post_id)?.caption||'Post activity'} · {log.platform}</strong><span>{new Date(log.created_at).toLocaleString()} · {log.message||'No additional details'}</span></div><span className={'draft-status '+(log.status==='published'?'success-status':'')}>{log.status}</span></div>)}{!logs.length&&<div className="empty-state">No publishing events have been recorded yet.</div>}</div></section></>
 }
-function Accounts({accounts,onConnect,onConnectFacebook,onConnectTikTok,onDisconnect,busy}) {
-  return <><PageHeader eyebrow="YOUR SOCIAL CHANNELS" title="Connected accounts." description="Manage multiple authorized social profiles. Never share your social passwords."/><div className="accounts-grid">
+function Accounts({accounts,onConnect,onConnectTikTok,onDisconnect,busy}) {
+  return <><PageHeader eyebrow="YOUR SOCIAL CHANNELS" title="Connected accounts." description="Manage Instagram and TikTok now; YouTube connection is being prepared."/><div className="accounts-grid">
     {platforms.map(p=><article className="account-card card" key={p.id}>
       <div className="account-card-top"><span className={'platform-mark '+p.id}>{p.mark}</span><span className="account-status pending">{accounts.filter(a=>a.platform===p.id&&a.account_status==='connected').length} connected</span></div>
       <h2>{p.label}</h2>
-      <p className="muted small">{p.id==='instagram'?'Meta Unified Login for professional Instagram accounts.':p.id==='facebook'?'Connect Facebook Pages where you have content-creation access.':'TikTok Content Posting API for video publishing.'}</p>
+      <p className="muted small">{p.id==='instagram'?'Meta login for professional Instagram accounts.':'TikTok Content Posting API for video publishing.'}</p>
       {accounts.filter(a=>a.platform===p.id).map(a=><div className="channel-row" key={a.id}><span>{a.username?'@'+a.username:a.display_name||a.platform_user_id}</span><button className="danger-action" onClick={()=>onDisconnect(a)}><Trash2 size={13}/> Disconnect</button></div>)}
-      <button className="primary-btn full" onClick={p.id==='instagram'?onConnect:p.id==='facebook'?onConnectFacebook:onConnectTikTok} disabled={busy}>
-        Connect {p.label} {p.id==='instagram'?<Instagram size={16}/>:p.id==='facebook'?'f':'♪'}
+      <button className="primary-btn full" onClick={p.id==='instagram'?onConnect:onConnectTikTok} disabled={busy}>
+        Connect {p.label} {p.id==='instagram'?<Instagram size={16}/>:'♪'}
       </button>
-      {p.id==='facebook'&&<p className="fine-print">Requires Meta Facebook Login, Page access and approval for Page publishing.</p>}
-      {p.id==='tiktok'&&<p className="fine-print">Requires TikTok Content Posting API approval and verified media domain for photo posts. Video uploads are supported by the integration.</p>}
+      {p.id==='tiktok'&&<p className="fine-print">Video publishing is implemented. TikTok app credentials and Content Posting API approval are required before account testing.</p>}
     </article>)}
+    <article className="account-card card">
+      <div className="account-card-top"><span className="platform-mark youtube">YT</span><span className="account-status pending">Setup required</span></div>
+      <h2>YouTube</h2>
+      <p className="muted small">YouTube channel connection and video publishing are the next integration to build.</p>
+      <button className="primary-btn full" disabled title="YouTube OAuth setup is not deployed yet">YouTube setup in progress</button>
+      <p className="fine-print">Requires a Google Cloud project, YouTube Data API v3, OAuth consent screen and client credentials.</p>
+    </article>
   </div></>
 }
 function SettingsView({profile,setProfile,settings,setSettings,onProfileSave,onSettingsSave,onPasswordReset,busy,email}) {
