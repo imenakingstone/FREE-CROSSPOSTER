@@ -137,6 +137,27 @@ export default function App() {
     } catch (error) { setNotice(error.message || 'Instagram publishing failed.'); await refreshWorkspace() }
     finally { setPublishingPostId(null) }
   }
+  async function connectPlatform(platform) {
+    setBusy(true); setNotice('')
+    try {
+      const { data, error } = await supabase.functions.invoke(platform + '-oauth-start', { body: {} })
+      if (error) throw error
+      if (!data?.url) throw new Error(data?.error || platform + ' authorization could not start.')
+      window.location.assign(data.url)
+    } catch (error) { setNotice(error.message || 'Could not start ' + platform + ' authorization.'); setBusy(false) }
+  }
+  async function publishDestination(postId, destinationId, platform) {
+    if (platform === 'instagram') return publishInstagram(postId, destinationId)
+    setPublishingPostId(postId); setNotice('')
+    try {
+      const { data, error } = await supabase.functions.invoke(platform + '-publish', { body: { post_id: postId, destination_id: destinationId } })
+      if (error) throw error
+      if (data?.error) throw new Error(data.error)
+      setNotice(platform === 'tiktok' ? 'TikTok accepted the video upload. Check TikTok for final processing status.' : 'Facebook confirmed the post was published.')
+      await refreshWorkspace()
+    } catch (error) { setNotice(error.message || (platform + ' publishing failed.')); await refreshWorkspace() }
+    finally { setPublishingPostId(null) }
+  }
   async function createDraft(event) {
     event.preventDefault()
     if (!caption.trim() && !file) return setNotice('Add a caption or choose a photo/video first.')
@@ -267,10 +288,10 @@ export default function App() {
       <div className="dashboard-content">
         {activeView === 'overview' && <Overview posts={posts} accounts={socialAccounts} schedules={schedules} logs={logs} onNavigate={setActiveView} />}
         {activeView === 'create' && <CreatePost caption={caption} setCaption={setCaption} file={file} setFile={setFile} selectedPlatforms={selectedPlatforms} setSelectedPlatforms={setSelectedPlatforms} onSubmit={createDraft} busy={busy} />}
-        {activeView === 'drafts' && <Drafts posts={draftPosts} destinations={postDestinations} accounts={socialAccounts} onDelete={deleteDraft} onSave={saveCaption} onPublish={publishInstagram} onAssignAccount={assignDestinationAccount} publishingPostId={publishingPostId} />}
+        {activeView === 'drafts' && <Drafts posts={draftPosts} destinations={postDestinations} accounts={socialAccounts} onDelete={deleteDraft} onSave={saveCaption} onPublish={publishDestination} onAssignAccount={assignDestinationAccount} publishingPostId={publishingPostId} />}
         {activeView === 'calendar' && <CalendarView posts={posts} schedules={schedules} onSchedule={schedulePost} onCancel={cancelSchedule} busy={busy} schedulePostId={schedulePostId} setSchedulePostId={setSchedulePostId} destinationId={scheduleDestinationId} setDestinationId={setScheduleDestinationId} scheduleAt={scheduleAt} setScheduleAt={setScheduleAt} destinations={destRows} />}
         {activeView === 'history' && <HistoryView logs={logs} posts={posts} />}
-        {activeView === 'accounts' && <Accounts accounts={socialAccounts} onConnect={connectInstagram} onDisconnect={disconnectAccount} busy={busy} />}
+        {activeView === 'accounts' && <Accounts accounts={socialAccounts} onConnect={connectInstagram} onConnectFacebook={() => connectPlatform('facebook')} onConnectTikTok={() => connectPlatform('tiktok')} onDisconnect={disconnectAccount} busy={busy} />}
         {activeView === 'settings' && <SettingsView profile={profile} setProfile={setProfile} settings={settings} setSettings={setSettings} onProfileSave={saveProfile} onSettingsSave={saveSettings} onPasswordReset={sendPasswordReset} busy={busy} email={session.user.email} />}
         {notice && <p className="notice workspace-notice">{notice}</p>}
       </div>
@@ -288,54 +309,46 @@ function Overview({posts,accounts,schedules,logs,onNavigate}) {
   return <><PageHeader eyebrow="YOUR PUBLISHING WORKSPACE" title="Good to see you." description="A clear view of your content and connected channels." action={<span className="status-pill"><span/> Workspace ready</span>}/><div className="stats-grid">{stats.map(([label,value])=><div className="card stat-card" key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><div className="dashboard-grid overview-grid"><section className="card"><div className="section-heading"><div><h2>Quick actions</h2><p className="muted small">Pick up where you left off.</p></div></div><div className="quick-actions"><button className="quick-action" onClick={()=>onNavigate('create')}><Plus/>Create a post</button><button className="quick-action" onClick={()=>onNavigate('calendar')}><CalendarDays/>Schedule content</button><button className="quick-action" onClick={()=>onNavigate('accounts')}><Link2/>Connect an account</button></div></section><section className="card"><div className="section-heading"><div><h2>Channels</h2><p className="muted small">Connection status</p></div></div>{platforms.map(p=><div className="channel-row" key={p.id}><span className={'platform-mark '+p.id}>{p.mark}</span><span>{p.label}</span><span className="not-connected">{accounts.filter(a=>a.platform===p.id&&a.account_status==='connected').length} connected</span></div>)}</section></div><section className="card recent-card"><div className="section-heading"><div><h2>Recent content</h2><p className="muted small">Your latest posts.</p></div><button className="text-action" onClick={()=>onNavigate('drafts')}>View drafts</button></div>{posts.slice(0,5).map(p=><div className="simple-row" key={p.id}><div><strong>{p.caption || 'Media-only post'}</strong><span>{new Date(p.created_at).toLocaleString()}</span></div><span className="draft-status">{p.status}</span></div>)}{!posts.length&&<div className="empty-state">No posts yet. Create your first post.</div>}</section></>
 }
 function CreatePost({caption,setCaption,file,setFile,selectedPlatforms,setSelectedPlatforms,onSubmit,busy}) {
-  return <><PageHeader eyebrow="CONTENT STUDIO" title="Create a post." description="Prepare your content once and choose where it should go."/><div className="card composer"><form onSubmit={onSubmit}><label>Caption<textarea rows="6" value={caption} onChange={e=>setCaption(e.target.value)} placeholder="Write your caption…"/></label><label className="upload-zone"><input type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm" onChange={e=>setFile(e.target.files?.[0]||null)}/>{file?<><div className="upload-icon"><Video/></div><strong>{file.name}</strong><span>{(file.size/1024/1024).toFixed(1)} MB · click to replace</span></>:<><div className="upload-icon"><ImagePlus/></div><strong>Add a photo or video</strong><span>JPEG, PNG, WebP, GIF, MP4, MOV or WebM · max 50 MB</span></>}</label><div className="destination-block"><div className="destination-title"><span>Choose destinations</span><span className="muted tiny">Publishing requires an authorized account</span></div><div className="platform-list">{platforms.map(p=><button type="button" key={p.id} disabled={p.id!=='instagram'} className={'platform-choice '+(selectedPlatforms.includes(p.id)?'selected':'')+(p.id!=='instagram'?' platform-disabled':'')} onClick={()=>setSelectedPlatforms(current=>current.includes(p.id)?current.filter(x=>x!==p.id):[...current,p.id])}><span className={'platform-mark '+p.id}>{p.mark}</span>{p.label}{p.id!=='instagram'&&<small>API setup required</small>}<span className="check">{selectedPlatforms.includes(p.id)?'✓':p.id==='instagram'?'+':'—'}</span></button>)}</div></div><button className="primary-btn full" disabled={busy}>{busy?'Saving…':'Save post draft'} <Send size={16}/></button></form></div></>
+  return <><PageHeader eyebrow="CONTENT STUDIO" title="Create a post." description="Prepare your content once and choose where it should go."/><div className="card composer"><form onSubmit={onSubmit}><label>Caption<textarea rows="6" value={caption} onChange={e=>setCaption(e.target.value)} placeholder="Write your caption…"/></label><label className="upload-zone"><input type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm" onChange={e=>setFile(e.target.files?.[0]||null)}/>{file?<><div className="upload-icon"><Video/></div><strong>{file.name}</strong><span>{(file.size/1024/1024).toFixed(1)} MB · click to replace</span></>:<><div className="upload-icon"><ImagePlus/></div><strong>Add a photo or video</strong><span>JPEG, PNG, WebP, GIF, MP4, MOV or WebM · max 50 MB</span></>}</label><div className="destination-block"><div className="destination-title"><span>Choose destinations</span><span className="muted tiny">Publishing requires an authorized account</span></div><div className="platform-list">{platforms.map(p=><button type="button" key={p.id} disabled={false} className={'platform-choice '+(selectedPlatforms.includes(p.id)?'selected':'')+''} onClick={()=>setSelectedPlatforms(current=>current.includes(p.id)?current.filter(x=>x!==p.id):[...current,p.id])}><span className={'platform-mark '+p.id}>{p.mark}</span>{p.label}{p.id==='tiktok'&&<small>Video posts</small>}<span className="check">{selectedPlatforms.includes(p.id)?'✓':p.id==='instagram'?'+':'—'}</span></button>)}</div></div><button className="primary-btn full" disabled={busy}>{busy?'Saving…':'Save post draft'} <Send size={16}/></button></form></div></>
 }
 function Drafts({posts,destinations,accounts,onDelete,onSave,onPublish,onAssignAccount,publishingPostId}) {
   const [edits,setEdits]=useState({})
-  const connectedAccounts=accounts.filter(account=>account.platform==='instagram'&&account.account_status==='connected')
   return <>
-    <PageHeader eyebrow="CONTENT LIBRARY" title="Drafts." description="Edit captions, choose an Instagram account and publish your content."/>
-    <section className="card">
-      <div className="draft-list">
-        {posts.map(post=>{
-          const targets=destinations.filter(item=>item.post_id===post.id)
-          const instagramTargets=targets.filter(item=>item.platform==='instagram')
-          return <article className="draft-editor" key={post.id}>
-            <textarea rows="3" value={edits[post.id]??post.caption} onChange={event=>setEdits(value=>({...value,[post.id]:event.target.value}))}/>
-            <div className="draft-editor-footer">
-              <span>{post.media_type||'Text post'} · {new Date(post.created_at).toLocaleDateString()} · {post.status}</span>
-              <div className="button-row">
-                <button className="secondary-action" onClick={()=>onSave(post.id,edits[post.id]??post.caption)}><Save size={14}/> Save</button>
-                {instagramTargets.map(destination=>{
-                  const account=accounts.find(item=>item.id===destination.social_account_id&&item.account_status==='connected')
-                  return <div className="draft-target" key={destination.id}>
-                    {account
-                      ? <span className="draft-target-name">@{account.username||'Instagram account'}</span>
-                      : <select aria-label="Choose Instagram account" value="" onChange={event=>event.target.value&&onAssignAccount(destination.id,event.target.value)} disabled={!connectedAccounts.length}>
-                          <option value="">{connectedAccounts.length?'Choose Instagram account…':'Connect Instagram first'}</option>
-                          {connectedAccounts.map(item=><option key={item.id} value={item.id}>{item.username?'@'+item.username:item.display_name||item.platform_user_id}</option>)}
-                        </select>}
-                    {destination.status==='published'
-                      ? <span className="draft-status success-status">Published</span>
-                      : destination.status==='scheduled'||destination.status==='processing'
-                        ? <span className="draft-status">{destination.status}</span>
-                        : <button className="secondary-action" onClick={()=>onPublish(post.id,destination.id)} disabled={publishingPostId===post.id||!account}>
-                            {publishingPostId===post.id?'Publishing…':'Publish'}
-                          </button>}
-                  </div>
-                })}
-                {!instagramTargets.length&&<span className="muted tiny">No Instagram destination selected</span>}
-                <button className="danger-action" onClick={()=>onDelete(post)}><Trash2 size={14}/> Delete</button>
-              </div>
+    <PageHeader eyebrow="CONTENT LIBRARY" title="Drafts." description="Edit captions, assign each destination account and publish."/>
+    <section className="card"><div className="draft-list">
+      {posts.map(post=>{
+        const targets=destinations.filter(item=>item.post_id===post.id)
+        return <article className="draft-editor" key={post.id}>
+          <textarea rows="3" value={edits[post.id]??post.caption} onChange={event=>setEdits(value=>({...value,[post.id]:event.target.value}))}/>
+          <div className="draft-editor-footer"><span>{post.media_type||'Text post'} · {new Date(post.created_at).toLocaleDateString()} · {post.status}</span>
+            <div className="button-row">
+              <button className="secondary-action" onClick={()=>onSave(post.id,edits[post.id]??post.caption)}><Save size={14}/> Save</button>
+              {targets.map(destination=>{
+                const platform=destination.platform
+                const linked=accounts.filter(item=>item.platform===platform&&item.account_status==='connected')
+                const account=accounts.find(item=>item.id===destination.social_account_id&&item.account_status==='connected')
+                const label=platform==='instagram'?'Instagram':platform==='facebook'?'Facebook Page':'TikTok'
+                return <div className="draft-target" key={destination.id}>
+                  {account?<span className="draft-target-name">{account.username?'@'+account.username:account.display_name||label}</span>
+                  :<select aria-label={'Choose '+label+' account'} value="" onChange={event=>event.target.value&&onAssignAccount(destination.id,event.target.value)} disabled={!linked.length}>
+                    <option value="">{linked.length?'Choose '+label+' account…':'Connect '+label+' first'}</option>
+                    {linked.map(item=><option key={item.id} value={item.id}>{item.username?'@'+item.username:item.display_name||item.platform_user_id}</option>)}
+                  </select>}
+                  {destination.status==='published'?<span className="draft-status success-status">Published</span>
+                  :destination.status==='scheduled'||destination.status==='processing'?<span className="draft-status">{destination.status}</span>
+                  :<button className="secondary-action" onClick={()=>onPublish(post.id,destination.id,platform)} disabled={publishingPostId===post.id||!account}>{publishingPostId===post.id?'Publishing…':'Publish '+label}</button>}
+                </div>
+              })}
+              {!targets.length&&<span className="muted tiny">No destinations selected</span>}
+              <button className="danger-action" onClick={()=>onDelete(post)}><Trash2 size={14}/> Delete</button>
             </div>
-          </article>
-        })}
-        {!posts.length&&<div className="empty-state">No drafts to show.</div>}
-      </div>
-    </section>
+          </div>
+        </article>
+      })}
+      {!posts.length&&<div className="empty-state">No drafts to show.</div>}
+    </div></section>
   </>
 }
-
 function CalendarView({posts,schedules,onSchedule,onCancel,busy,schedulePostId,setSchedulePostId,destinationId,setDestinationId,scheduleAt,setScheduleAt,destinations}) {
   const [scheduleRows,setScheduleRows]=useState([])
   useEffect(()=>{
@@ -395,8 +408,20 @@ function HistoryView({logs,posts}) {
   const postMap=new Map(posts.map(p=>[p.id,p]))
   return <><PageHeader eyebrow="ACTIVITY" title="Publishing history." description="Review publishing events and errors recorded by connected platforms."/><section className="card"><div className="history-list">{logs.map(log=><div className="simple-row" key={log.id}><div><strong>{postMap.get(log.post_id)?.caption||'Post activity'} · {log.platform}</strong><span>{new Date(log.created_at).toLocaleString()} · {log.message||'No additional details'}</span></div><span className={'draft-status '+(log.status==='published'?'success-status':'')}>{log.status}</span></div>)}{!logs.length&&<div className="empty-state">No publishing events have been recorded yet.</div>}</div></section></>
 }
-function Accounts({accounts,onConnect,onDisconnect,busy}) {
-  return <><PageHeader eyebrow="YOUR SOCIAL CHANNELS" title="Connected accounts." description="Manage multiple authorized social profiles. Never share your social passwords."/><div className="accounts-grid">{platforms.map(p=><article className="account-card card" key={p.id}><div className="account-card-top"><span className={'platform-mark '+p.id}>{p.mark}</span><span className="account-status pending">{accounts.filter(a=>a.platform===p.id&&a.account_status==='connected').length} connected</span></div><h2>{p.label}</h2><p className="muted small">{p.id==='instagram'?'Meta Unified Login for professional Instagram accounts.':p.id==='facebook'?'Facebook Page publishing integration.':'TikTok Content Posting API integration.'}</p>{accounts.filter(a=>a.platform===p.id).map(a=><div className="channel-row" key={a.id}><span>{a.username?'@'+a.username:a.display_name||a.platform_user_id}</span><button className="danger-action" onClick={()=>onDisconnect(a)}><Trash2 size={13}/> Disconnect</button></div>)}{p.id==='instagram'?<button className="primary-btn full" onClick={onConnect} disabled={busy}>Connect another Instagram <Instagram size={16}/></button>:<div className="integration-block"><strong>Not connected yet</strong><span>{p.id==='facebook'?'Requires Facebook Login permissions, Page access and Meta review.':'Requires a TikTok developer app, Content Posting API access and approval.'}</span></div>}</article>)}</div></>
+function Accounts({accounts,onConnect,onConnectFacebook,onConnectTikTok,onDisconnect,busy}) {
+  return <><PageHeader eyebrow="YOUR SOCIAL CHANNELS" title="Connected accounts." description="Manage multiple authorized social profiles. Never share your social passwords."/><div className="accounts-grid">
+    {platforms.map(p=><article className="account-card card" key={p.id}>
+      <div className="account-card-top"><span className={'platform-mark '+p.id}>{p.mark}</span><span className="account-status pending">{accounts.filter(a=>a.platform===p.id&&a.account_status==='connected').length} connected</span></div>
+      <h2>{p.label}</h2>
+      <p className="muted small">{p.id==='instagram'?'Meta Unified Login for professional Instagram accounts.':p.id==='facebook'?'Connect Facebook Pages where you have content-creation access.':'TikTok Content Posting API for video publishing.'}</p>
+      {accounts.filter(a=>a.platform===p.id).map(a=><div className="channel-row" key={a.id}><span>{a.username?'@'+a.username:a.display_name||a.platform_user_id}</span><button className="danger-action" onClick={()=>onDisconnect(a)}><Trash2 size={13}/> Disconnect</button></div>)}
+      <button className="primary-btn full" onClick={p.id==='instagram'?onConnect:p.id==='facebook'?onConnectFacebook:onConnectTikTok} disabled={busy}>
+        Connect {p.label} {p.id==='instagram'?<Instagram size={16}/>:p.id==='facebook'?'f':'♪'}
+      </button>
+      {p.id==='facebook'&&<p className="fine-print">Requires Meta Facebook Login, Page access and approval for Page publishing.</p>}
+      {p.id==='tiktok'&&<p className="fine-print">Requires TikTok Content Posting API approval and verified media domain for photo posts. Video uploads are supported by the integration.</p>}
+    </article>)}
+  </div></>
 }
 function SettingsView({profile,setProfile,settings,setSettings,onProfileSave,onSettingsSave,onPasswordReset,busy,email}) {
   return <><PageHeader eyebrow="WORKSPACE PREFERENCES" title="Settings." description="Manage your profile, timezone and notification preferences."/><div className="dashboard-grid settings-grid"><form className="card" onSubmit={onProfileSave}><h2>Profile</h2><p className="muted small">Your account details.</p><label>Email address<input value={email} disabled/></label><label>Display name<input value={profile.display_name} onChange={e=>setProfile(p=>({...p,display_name:e.target.value}))} placeholder="Your name"/></label><label>Avatar URL<input value={profile.avatar_url} onChange={e=>setProfile(p=>({...p,avatar_url:e.target.value}))} placeholder="https://…"/></label><button className="primary-btn full" disabled={busy}>Save profile <Save size={15}/></button></form><form className="card" onSubmit={onSettingsSave}><h2>Preferences</h2><p className="muted small">Choose how your workspace behaves. In-app alerts appear in the bell menu; email delivery still needs an email provider.</p><label>Timezone<select value={settings.timezone} onChange={e=>setSettings(s=>({...s,timezone:e.target.value}))}><option>Africa/Kigali</option><option>Africa/Nairobi</option><option>UTC</option><option>Europe/London</option></select></label>{[['email_notifications','Email notifications (delivery not enabled)'],['publish_success_notifications','Successful publishing alerts'],['publish_failure_notifications','Failed publishing alerts'],['weekly_summary','Weekly summary']].map(([key,label])=><label className="toggle-row" key={key}><span>{label}</span><input type="checkbox" checked={!!settings[key]} onChange={e=>setSettings(s=>({...s,[key]:e.target.checked}))}/></label>)}<button className="primary-btn full" disabled={busy}>Save preferences <Save size={15}/></button></form></div><section className="card security-card"><h2>Security</h2><p className="muted small">Social access tokens are stored encrypted by the server. You can revoke a social connection from Connected accounts. Use a unique password for your FREE CROSSPOSTER account.</p><button type="button" className="secondary-action" onClick={onPasswordReset}>Send password reset email</button><div className="settings-api-note"><strong>Platform API credentials</strong><span>Meta and TikTok app secrets stay in Supabase Edge Function secrets. They are never stored in browser settings or exposed in this page.</span></div></section></>
