@@ -24,6 +24,7 @@ export default function App() {
   const [posts, setPosts] = useState([])
   const [activeView, setActiveView] = useState('publishing')
   const [connectBusy, setConnectBusy] = useState(false)
+  const [socialAccounts, setSocialAccounts] = useState([])
 
   useEffect(() => {
     if (!supabase) { setLoading(false); return }
@@ -40,6 +41,10 @@ export default function App() {
   useEffect(() => {
     if (session?.user) loadPosts()
   }, [session?.user?.id])
+
+  useEffect(() => {
+    if (session?.user && activeView === 'accounts') loadSocialAccounts()
+  }, [session?.user?.id, activeView])
 
   async function loadPosts() {
     const { data, error } = await supabase
@@ -83,7 +88,27 @@ export default function App() {
   }
 
   async function connectInstagram() {
-    setNotice('Instagram connection is not ready yet. We are building the direct Instagram authorization flow. You will not be sent through Facebook Login.')
+    setConnectBusy(true)
+    setNotice('')
+    try {
+      const { data, error } = await supabase.functions.invoke('instagram-oauth-start', { body: {} })
+      if (error) throw error
+      if (!data?.url) throw new Error(data?.error || 'Instagram authorization could not start.')
+      window.location.assign(data.url)
+    } catch (error) {
+      setNotice(error.message || 'Could not start Instagram authorization.')
+      setConnectBusy(false)
+    }
+  }
+
+  async function loadSocialAccounts() {
+    const { data, error } = await supabase
+      .from('social_accounts')
+      .select('id, platform, platform_user_id, username, display_name, account_status, token_expires_at')
+      .eq('user_id', session.user.id)
+      .order('connected_at', { ascending: false })
+    if (error) setNotice(error.message)
+    else setSocialAccounts(data ?? [])
   }
 
   function togglePlatform(id) {
@@ -214,7 +239,7 @@ export default function App() {
           <div className="user-area"><span className="user-email">{session.user.email}</span><button className="icon-btn" onClick={handleSignOut} title="Sign out"><LogOut size={18} /></button></div>
         </header>
       <div className="dashboard-content">
-        {activeView === 'accounts' ? <ConnectedAccounts onConnect={connectInstagram} connectBusy={connectBusy} notice={notice} /> : <>
+        {activeView === 'accounts' ? <ConnectedAccounts onConnect={connectInstagram} connectBusy={connectBusy} notice={notice} socialAccounts={socialAccounts} /> : <>
           <div className="welcome-row"><div><p className="eyebrow">YOUR PUBLISHING WORKSPACE</p><h1>Good to see you.</h1><p className="muted">Create once. Keep your content organized.</p></div><div className="status-pill"><span /> Workspace ready</div></div>
           <div className="dashboard-grid">
             <section className="composer card">
@@ -244,7 +269,7 @@ export default function App() {
   )
 }
 
-function ConnectedAccounts({ onConnect, connectBusy, notice }) {
+function ConnectedAccounts({ onConnect, connectBusy, notice, socialAccounts = [] }) {
   const accounts = [
     {
       id: 'instagram',
@@ -282,7 +307,7 @@ function ConnectedAccounts({ onConnect, connectBusy, notice }) {
         <h1>Connected accounts.</h1>
         <p className="muted">Connect each social account once. Manage all your channels from one place.</p>
       </div>
-      <div className="status-pill pending-pill"><span /> 0 accounts connected</div>
+      <div className="status-pill pending-pill"><span /> {socialAccounts.length} accounts connected</div>
     </div>
     <section className="accounts-intro card">
       <div className="accounts-intro-icon"><Link2 size={24} /></div>
@@ -292,18 +317,22 @@ function ConnectedAccounts({ onConnect, connectBusy, notice }) {
       </div>
     </section>
     <div className="accounts-grid">
-      {accounts.map(account => <article className="account-card card" key={account.id}>
-        <div className="account-card-top">
-          <span className={`platform-mark ${account.id}`}>{account.mark}</span>
-          <span className={account.available ? 'account-status pending' : 'account-status soon'}>{account.available ? 'Not connected' : 'Coming soon'}</span>
-        </div>
-        <h2>{account.name}</h2>
-        <p className="muted small">{account.description}</p>
-        <p className="account-detail">{account.detail}</p>
-        {account.available
-          ? <button className="primary-btn full account-connect" type="button" onClick={onConnect} disabled={connectBusy}>{connectBusy ? 'Please wait…' : account.action} <ArrowUpRight size={16} /></button>
-          : <button className="secondary-btn full account-connect" type="button" disabled>{account.action}</button>}
-      </article>)}
+      {accounts.map(account => {
+        const connected = socialAccounts.filter(item => item.platform === account.id && item.account_status === 'connected')
+        return <article className="account-card card" key={account.id}>
+          <div className="account-card-top">
+            <span className={`platform-mark ${account.id}`}>{account.mark}</span>
+            <span className={connected.length ? 'account-status connected' : account.available ? 'account-status pending' : 'account-status soon'}>{connected.length ? `${connected.length} connected` : account.available ? 'Not connected' : 'Coming soon'}</span>
+          </div>
+          <h2>{account.name}</h2>
+          <p className="muted small">{account.description}</p>
+          <p className="account-detail">{account.detail}</p>
+          {connected.map(item => <div className="channel-row" key={item.id}><span>{item.username ? `@${item.username}` : item.display_name || account.name}</span><span className="not-connected">Connected</span></div>)}
+          {account.available
+            ? <button className="primary-btn full account-connect" type="button" onClick={onConnect} disabled={connectBusy}>{connectBusy ? 'Please wait…' : connected.length ? 'Connect another account' : account.action} <ArrowUpRight size={16} /></button>
+            : <button className="secondary-btn full account-connect" type="button" disabled>{account.action}</button>}
+        </article>
+      })}
     </div>
     {notice && <p className="notice">{notice}</p>}
     <p className="accounts-footnote"><ShieldCheck size={15} /> Your authorization tokens will be handled securely by the backend. You can disconnect an account at any time once account management is enabled.</p>
