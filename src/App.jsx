@@ -335,7 +335,7 @@ function Drafts({posts,destinations,accounts,onDelete,onSave,onPublish,onAssignA
                     {linked.map(item=><option key={item.id} value={item.id}>{item.username?'@'+item.username:item.display_name||item.platform_user_id}</option>)}
                   </select>}
                   {destination.status==='published'?<span className="draft-status success-status">Published</span>
-                  :destination.status==='scheduled'||destination.status==='processing'?<span className="draft-status">{destination.status}</span>
+                  :destination.status==='scheduled'||destination.status==='processing'||destination.status==='publishing'?<span className="draft-status">{destination.status}</span>
                   :<button className="secondary-action" onClick={()=>onPublish(post.id,destination.id,platform)} disabled={publishingPostId===post.id||!account}>{publishingPostId===post.id?'Publishing…':'Publish '+label}</button>}
                 </div>
               })}
