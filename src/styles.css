@@ -10,3 +10,25 @@
 
 .ig-connect-btn{margin-left:auto;white-space:nowrap}
 @media(max-width:850px){.ig-connect-btn{margin-left:76px}}
+
+
+.accounts-page .welcome-row{margin-bottom:24px}
+.accounts-intro{display:flex;align-items:center;gap:16px;margin-bottom:20px}
+.accounts-intro-icon{width:50px;height:50px;border-radius:14px;background:#1d3025;color:var(--accent);display:grid;place-items:center;flex-shrink:0}
+.accounts-intro h2{font:700 16px Manrope;margin:0 0 5px}
+.accounts-intro p{margin:0;max-width:760px}
+.accounts-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.account-card{display:flex;flex-direction:column;min-height:255px}
+.account-card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.account-card-top .platform-mark{width:42px;height:42px;border-radius:13px;font-size:15px}
+.account-card h2{font:700 19px Manrope;margin:0 0 7px}
+.account-card>p{margin:0}
+.account-detail{font-size:10px;color:#aab5c9;margin-top:13px!important}
+.account-status{font-size:10px;padding:6px 9px;border-radius:20px}
+.account-status.pending{color:#f1d7a0;background:#352c1d}
+.account-status.soon{color:#aab5c9;background:#202a3d}
+.account-connect{margin-top:auto}
+.secondary-btn{border:1px solid #35425b;background:#172137;color:#8d99ae;padding:14px 18px;border-radius:10px;font-weight:700;cursor:not-allowed}
+.accounts-footnote{display:flex;align-items:center;gap:8px;color:#8996aa;font-size:11px;line-height:1.5;margin:20px 2px}
+.accounts-footnote svg{color:var(--accent);flex-shrink:0}
+@media(max-width:850px){.accounts-grid{grid-template-columns:1fr}.account-card{min-height:220px}.accounts-intro{align-items:flex-start}.accounts-page .welcome-row{flex-direction:column}}
