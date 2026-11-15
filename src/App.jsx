@@ -46,6 +46,15 @@ export default function App() {
   const [publishingPostId, setPublishingPostId] = useState(null)
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('connected') === '1' && params.get('connection') === 'instagram') {
+      const account = params.get('account')
+      setNotice('Instagram connected successfully' + (account ? ': ' + account : '') + '. Your account is now available in Connected accounts.')
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [])
+
+  useEffect(() => {
     if (!supabase) { setLoading(false); return }
     supabase.auth.getSession().then(({ data }) => { setSession(data.session); setLoading(false) })
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession))
@@ -120,7 +129,7 @@ export default function App() {
   async function connectInstagram() {
     setBusy(true); setNotice('')
     try {
-      const { data, error } = await supabase.functions.invoke('meta-oauth-start', { body: {} })
+      const { data, error } = await supabase.functions.invoke('meta-oauth-start', { body: { return_url: window.location.origin } })
       if (error) throw error
       if (!data?.url) throw new Error(data?.error || 'Instagram authorization could not start.')
       window.location.assign(data.url)
