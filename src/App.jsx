@@ -83,17 +83,7 @@ export default function App() {
   }
 
   async function connectInstagram() {
-    setConnectBusy(true)
-    setNotice('')
-    try {
-      const { data, error } = await supabase.functions.invoke('meta-oauth-start', { body: {} })
-      if (error) throw error
-      if (!data?.url) throw new Error('Meta did not return a login URL. Please try again.')
-      window.location.assign(data.url)
-    } catch (error) {
-      setNotice(error.message || 'Could not start Instagram connection.')
-      setConnectBusy(false)
-    }
+    setNotice('Direct Instagram login is being configured. This button will use Instagram authorization, not Facebook Login. No account has been connected yet.')
   }
 
   function togglePlatform(id) {
@@ -213,10 +203,10 @@ export default function App() {
       </header>
       <nav className="workspace-nav">
         <button className={activeView === 'publishing' ? 'active' : ''} onClick={() => setActiveView('publishing')}>Publishing workspace</button>
-        <button className={activeView === 'instagram' ? 'active' : ''} onClick={() => setActiveView('instagram')}><Instagram size={15} /> Instagram & Shop setup</button>
+        <button className={activeView === 'accounts' ? 'active' : ''} onClick={() => setActiveView('accounts')}><Link2 size={15} /> Connected accounts</button>
       </nav>
       <div className="dashboard-content">
-        {activeView === 'instagram' ? <InstagramSetup onConnect={connectInstagram} connectBusy={connectBusy} notice={notice} /> : <>
+        {activeView === 'accounts' ? <ConnectedAccounts onConnect={connectInstagram} connectBusy={connectBusy} notice={notice} /> : <>
           <div className="welcome-row"><div><p className="eyebrow">YOUR PUBLISHING WORKSPACE</p><h1>Good to see you.</h1><p className="muted">Create once. Keep your content organized.</p></div><div className="status-pill"><span /> Workspace ready</div></div>
           <div className="dashboard-grid">
             <section className="composer card">
@@ -245,33 +235,69 @@ export default function App() {
   )
 }
 
-function InstagramSetup({ onConnect, connectBusy, notice }) {
-  const steps = [
-    { title: 'Switch Instagram to a professional account', detail: 'Use a Business or Creator account. Personal accounts cannot use the Instagram professional publishing APIs.', link: 'https://www.instagram.com/accounts/convert_to_professional_account/', label: 'Open Instagram settings' },
-    { title: 'Connect Instagram to a Facebook Page', detail: 'For the Facebook Login API route and many Commerce setups, connect the Instagram account to the correct Facebook Page. The newer Instagram Login API can publish without a linked Page, so this is not required for every publishing connection.', link: 'https://business.facebook.com/latest/settings/business_assets', label: 'Open business assets' },
-    { title: 'Set up your Meta business portfolio', detail: 'Make sure you have full control of the correct business portfolio and assign the Instagram account, Page (if used), catalog and app assets as needed.', link: 'https://business.facebook.com/settings', label: 'Open business settings' },
-    { title: 'Create or connect a product catalog', detail: 'For Instagram Shop and product tagging, connect a catalog in Commerce Manager. This is separate from granting a crossposting app permission to publish ordinary posts.', link: 'https://www.facebook.com/commerce_manager', label: 'Open Commerce Manager' },
-    { title: 'Review Instagram Shopping eligibility', detail: 'Check country availability before spending time on setup. If your business is in Rwanda, Instagram Shop/product-tagging availability may be restricted; confirm the current decision inside Commerce Manager. Meta makes the final eligibility decision.', link: 'https://www.facebook.com/business/help/2347002662267537', label: 'Read eligibility requirements' },
-    { title: 'Authorize the app when its Meta connection is ready', detail: "The app will use Meta's official Instagram Login OAuth flow and request only the permissions needed for publishing. Never give your Instagram password to a third-party app; approve access only on an official Meta page.", link: 'https://developers.facebook.com/apps/', label: 'Open Meta for Developers' },
+function ConnectedAccounts({ onConnect, connectBusy, notice }) {
+  const accounts = [
+    {
+      id: 'instagram',
+      name: 'Instagram',
+      description: 'Connect a Business or Creator account directly with Instagram.',
+      detail: 'Instagram login · No Facebook Page required',
+      mark: 'IG',
+      action: 'Connect Instagram',
+      available: true,
+    },
+    {
+      id: 'facebook',
+      name: 'Facebook',
+      description: 'Connect a Facebook Page to publish content to your audience.',
+      detail: 'Official Facebook authorization',
+      mark: 'f',
+      action: 'Coming soon',
+      available: false,
+    },
+    {
+      id: 'tiktok',
+      name: 'TikTok',
+      description: 'Connect your TikTok account for supported video publishing.',
+      detail: 'Official TikTok authorization',
+      mark: '♪',
+      action: 'Coming soon',
+      available: false,
+    },
   ]
-  return <div className="ig-setup-page">
-    <div className="welcome-row"><div><p className="eyebrow">META BUSINESS CONNECTION</p><h1>Set up Instagram.</h1><p className="muted">Prepare your professional account, business assets, catalog and app permissions in the right order.</p></div><div className="status-pill pending-pill"><span /> Setup guide · not connected</div></div>
-    <section className="ig-hero card"><div className="ig-hero-icon"><Instagram size={27} /></div><div><p className="eyebrow">INSTAGRAM PROFESSIONAL</p><h2>Connect the account you want to publish from</h2><p className="muted small">FREE CROSSPOSTER does not have Meta OAuth credentials or an approved publishing connection yet. This page helps you prepare the account; it does not claim that your account or shop is connected.</p></div><button className="primary-btn ig-connect-btn" type="button" onClick={onConnect} disabled={connectBusy}>{connectBusy ? 'Opening Meta login…' : 'Connect Instagram'} <ArrowUpRight size={16} /></button></section>{notice && <p className="notice">{notice}</p>}
-    <div className="ig-setup-grid">
-      <section className="card ig-checklist"><div className="section-heading"><div><h2>Instagram setup checklist</h2><p className="muted small">Complete these steps in Meta. Your changes are made in their official tools.</p></div><span className="step-label">ACCOUNT SETUP</span></div>
-        {steps.map((step, i) => <article className="ig-step" key={step.title}><div className="ig-step-number">{String(i + 1).padStart(2, '0')}</div><div className="ig-step-copy"><h3>{step.title}</h3><p className="muted small">{step.detail}</p><a href={step.link} target="_blank" rel="noreferrer">{step.label} <ExternalLink size={13} /></a></div></article>)}
-      </section>
-      <aside className="side-column">
-        <section className="card status-card"><div className="section-heading"><div><h2>What you can connect</h2><p className="muted small">The full Meta setup includes these assets.</p></div></div>
-          <div className="asset-row"><Instagram /><div><strong>Instagram professional account</strong><span>Business or Creator</span></div><b>Not connected</b></div>
-          <div className="asset-row"><Facebook /><div><strong>Facebook Page</strong><span>Linked business Page</span></div><b>Not connected</b></div>
-          <div className="asset-row"><Store /><div><strong>Commerce catalog / Shop</strong><span>Products and shopping eligibility</span></div><b>Not connected</b></div>
-          <div className="asset-row"><Link2 /><div><strong>Meta app authorization</strong><span>OAuth permissions for publishing</span></div><b>Not connected</b></div>
-        </section>
-        <section className="card meta-note"><ShieldCheck size={21} /><h3>Keep your account safe</h3><p className="muted small">Only sign in on instagram.com or facebook.com. Do not paste passwords, access tokens or secret keys into this dashboard or GitHub.</p></section>
-        <section className="card meta-note"><h3>Important about Instagram Shop</h3><p className="muted small">Connecting a shop is separate from connecting an account for posting. Shop availability, product tagging and checkout features depend on Meta's current country, commerce and account eligibility rules.</p><a href="https://www.facebook.com/business/help/2347002662267537" target="_blank" rel="noreferrer">Check Meta requirements <ExternalLink size={13} /></a></section>
-      </aside>
+
+  return <div className="accounts-page">
+    <div className="welcome-row">
+      <div>
+        <p className="eyebrow">YOUR SOCIAL CHANNELS</p>
+        <h1>Connected accounts.</h1>
+        <p className="muted">Connect each social account once. Manage all your channels from one place.</p>
+      </div>
+      <div className="status-pill pending-pill"><span /> 0 accounts connected</div>
     </div>
+    <section className="accounts-intro card">
+      <div className="accounts-intro-icon"><Link2 size={24} /></div>
+      <div>
+        <h2>One place for every platform</h2>
+        <p className="muted small">Choose a platform below. You will authorize access on that platform's official sign-in page. FREE CROSSPOSTER will never ask you to share your social media password with us.</p>
+      </div>
+    </section>
+    <div className="accounts-grid">
+      {accounts.map(account => <article className="account-card card" key={account.id}>
+        <div className="account-card-top">
+          <span className={`platform-mark ${account.id}`}>{account.mark}</span>
+          <span className={account.available ? 'account-status pending' : 'account-status soon'}>{account.available ? 'Not connected' : 'Coming soon'}</span>
+        </div>
+        <h2>{account.name}</h2>
+        <p className="muted small">{account.description}</p>
+        <p className="account-detail">{account.detail}</p>
+        {account.available
+          ? <button className="primary-btn full account-connect" type="button" onClick={onConnect} disabled={connectBusy}>{connectBusy ? 'Please wait…' : account.action} <ArrowUpRight size={16} /></button>
+          : <button className="secondary-btn full account-connect" type="button" disabled>{account.action}</button>}
+      </article>)}
+    </div>
+    {notice && <p className="notice">{notice}</p>}
+    <p className="accounts-footnote"><ShieldCheck size={15} /> Your authorization tokens will be handled securely by the backend. You can disconnect an account at any time once account management is enabled.</p>
   </div>
 }
 
