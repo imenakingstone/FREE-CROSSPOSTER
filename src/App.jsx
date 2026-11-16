@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
-import { LayoutDashboard, CalendarDays, FileText, History, Link2, Settings, LogOut, ImagePlus, Send, ShieldCheck, Video, Trash2, Clock3, Plus, Save, X, RefreshCw, Bell, CheckCheck, Sparkles } from 'lucide-react'
+import { LayoutDashboard, CalendarDays, FileText, History, Link2, Settings, LogOut, ImagePlus, Send, ShieldCheck, Video, Trash2, Clock3, Plus, Save, X, RefreshCw, Bell, CheckCheck, Sparkles, Activity } from 'lucide-react'
 
 function CrossposterLogo() { return <span className="brand-icon crossposter-logo" aria-label="FREE CROSSPOSTER"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M8 13h17l-4-4m4 4-4 4M32 27H15l4-4m-4 4 4 4" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/><path d="M10 20h20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity=".55"/></svg></span> }
 function PlatformLogo({ platform }) {
@@ -22,6 +22,7 @@ const navItems = [
   { id: 'history', label: 'Publishing history', icon: History },
   { id: 'accounts', label: 'Connected accounts', icon: Link2 },
   { id: 'settings', label: 'Settings', icon: Settings },
+  { id: 'system-health', label: 'System Health', icon: Activity },
 ]
 
 export default function App() {
@@ -54,6 +55,8 @@ export default function App() {
   const [scheduleDestinationId, setScheduleDestinationId] = useState('')
   const [scheduleAt, setScheduleAt] = useState('')
   const [publishingPostId, setPublishingPostId] = useState(null)
+  const [healthReport, setHealthReport] = useState(null)
+  const [healthLoading, setHealthLoading] = useState(false)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -77,6 +80,20 @@ export default function App() {
 
   async function refreshWorkspace() {
     await Promise.all([loadPosts(), loadAccounts(), loadDestinations(), loadNotifications(), loadLogs(), loadSchedules(), loadProfile(), loadSettings()])
+  }
+  async function runSystemHealth() {
+    setHealthLoading(true); setNotice('')
+    try {
+      const { data, error } = await supabase.functions.invoke('system-health', { body: {} })
+      if (error) {
+        let details = null
+        try { details = await error.context?.json() } catch {}
+        throw new Error(details?.error || data?.error || error.message || 'System scan failed.')
+      }
+      if (data?.error) throw new Error(data.error)
+      setHealthReport(data)
+    } catch (error) { setNotice(error.message || 'Could not run the system scan.') }
+    finally { setHealthLoading(false) }
   }
   async function loadPosts() {
     const { data, error } = await supabase.from('posts').select('id,caption,media_path,media_type,original_filename,status,created_at,updated_at').order('created_at', { ascending: false }).limit(100)
@@ -329,7 +346,7 @@ export default function App() {
     <aside className="app-sidebar">
       <div className="brand"><CrossposterLogo /><span>FREE CROSSPOSTER</span></div>
       <p className="sidebar-label">WORKSPACE</p>
-      {navItems.map(item => { const Icon = item.icon; return <button key={item.id} className={activeView === item.id ? 'sidebar-link active' : 'sidebar-link'} onClick={() => { setActiveView(item.id); setNotice('') }}><Icon size={17} /> {item.label}</button> })}
+      {navItems.filter(item => item.id !== 'system-health' || session.user.email?.toLowerCase() === 'imenaking12@gmail.com').map(item => { const Icon = item.icon; return <button key={item.id} className={activeView === item.id ? 'sidebar-link active' : 'sidebar-link'} onClick={() => { setActiveView(item.id); setNotice('') }}><Icon size={17} /> {item.label}</button> })}
       <div className="sidebar-bottom"><div className="sidebar-user"><span className="avatar">{(session.user.email || 'U').slice(0,1).toUpperCase()}</span><span className="sidebar-user-email">{session.user.email}</span></div><button className="sidebar-signout" onClick={handleSignOut}><LogOut size={16} /> Sign out</button></div>
     </aside>
     <section className="app-main">
@@ -342,10 +359,31 @@ export default function App() {
         {activeView === 'history' && <HistoryView logs={logs} posts={posts} />}
         {activeView === 'accounts' && <Accounts accounts={socialAccounts} onConnect={connectInstagram} onConnectTikTok={() => connectPlatform('tiktok')} onDisconnect={disconnectAccount} busy={busy} />}
         {activeView === 'settings' && <SettingsView profile={profile} setProfile={setProfile} settings={settings} setSettings={setSettings} onProfileSave={saveProfile} onSettingsSave={saveSettings} onPasswordReset={sendPasswordReset} busy={busy} email={session.user.email} />}
+        {activeView === 'system-health' && session.user.email?.toLowerCase() === 'imenaking12@gmail.com' && <SystemHealthView report={healthReport} loading={healthLoading} onScan={runSystemHealth} />}
         {notice && <p className="notice workspace-notice">{notice}</p>}
       </div>
     </section>
   </main>
+}
+
+
+function SystemHealthView({ report, loading, onScan }) {
+  const statusLabel = status => status === 'critical' ? 'Critical' : status === 'warning' ? 'Warning' : status === 'info' ? 'Review' : 'Healthy'
+  return <section className="system-health-page">
+    <PageHeader eyebrow="ADMINISTRATOR ONLY" title="System Health." description="Read-only checks for Supabase security, configuration and database risks." action={<button className="primary-btn" onClick={onScan} disabled={loading}><Activity size={16}/>{loading ? 'Scanning…' : 'Run full scan'}</button>}/>
+    {!report && <div className="card health-empty"><ShieldCheck size={30}/><h2>Ready to inspect your backend</h2><p className="muted">Run a scan to check database access controls, integration secret configuration, extensions and index usage.</p></div>}
+    {report && <>
+      <div className={'health-summary '+report.overall}><div><span>Overall status</span><strong>{statusLabel(report.overall)}</strong><small>Last checked {new Date(report.checkedAt).toLocaleString()}</small></div><div className="health-counts"><span><b>{report.counts.critical}</b> Critical</span><span><b>{report.counts.warnings}</b> Warnings</span><span><b>{report.counts.info}</b> Review</span><span><b>{report.counts.healthy}</b> Healthy</span></div></div>
+      <div className="health-check-list">{report.checks.map(check=><article className="card health-check" key={check.id}><div className="health-check-head"><div><h2>{check.title}</h2><p>{check.summary}</p></div><span className={'health-status '+check.status}>{statusLabel(check.status)}</span></div>
+        {check.id === 'credentials' && check.details && <div className="health-details"><strong>Missing secret names</strong>{check.details.missing?.length ? <ul>{check.details.missing.map(name=><li key={name}><code>{name}</code></li>)}</ul> : <p>All expected secrets are present.</p>}<p className="fine-print">Add actual values in Supabase → Project Settings → Edge Functions → Secrets. Never paste secret values into chat or GitHub.</p></div>}
+        {check.id === 'rls' && check.details && <div className="health-details">{check.details.rlsDisabled?.length>0 && <><strong>RLS disabled</strong><ul>{check.details.rlsDisabled.map(t=><li key={t.schema+'.'+t.name}>{t.schema}.{t.name}</li>)}</ul></>}{check.details.publicTablesWithoutPolicies?.length>0 && <><strong>Public tables with no policies</strong><ul>{check.details.publicTablesWithoutPolicies.map(t=><li key={t.schema+'.'+t.name}>{t.schema}.{t.name}</li>)}</ul></>}</div>}
+        {check.id === 'extensions' && check.details?.extensions?.length>0 && <p className="health-details">Review: {check.details.extensions.join(', ')}</p>}
+        {check.id === 'indexes' && check.details?.indexes?.length>0 && <ul className="health-details">{check.details.indexes.map(i=><li key={i.schema+'.'+i.index}>{i.schema}.{i.table} — {i.index} ({i.scans} scans)</li>)}</ul>}
+        {check.id === 'database' && check.details?.sizeBytes && <p className="health-details">Database size: {(check.details.sizeBytes/1024/1024).toFixed(1)} MB</p>}
+      </article>)}</div>
+      <p className="fine-print">{report.note}</p>
+    </>}
+  </section>
 }
 
 function AuthScreen({ mode,setMode,email,setEmail,password,setPassword,displayName,setDisplayName,busy,notice,onSubmit }) {
