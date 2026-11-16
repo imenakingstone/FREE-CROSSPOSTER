@@ -104,7 +104,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const accessToken = tokenBody.access_token;
-    const profileRes = await fetch("https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,username,avatar_url", {
+    const profileRes = await fetch("https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,avatar_url", {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
     const profileBody = await profileRes.json().catch(() => ({}));
@@ -125,7 +125,7 @@ Deno.serve(async (req: Request) => {
       platform: "tiktok",
       platform_user_id: p.open_id,
       environment,
-      username: p.username || null,
+      username: null,
       display_name: p.display_name || "TikTok account",
       access_token_encrypted: await encrypt(accessToken),
       refresh_token_encrypted: tokenBody.refresh_token ? await encrypt(tokenBody.refresh_token) : null,
@@ -142,7 +142,7 @@ Deno.serve(async (req: Request) => {
 
     if (saveError) throw saveError;
 
-    return html("TikTok connected", `Connected @${p.username || p.display_name || "TikTok"}. Return to FREE CROSSPOSTER.`);
+    return html("TikTok connected", `Connected ${p.display_name || "your TikTok account"}. Return to FREE CROSSPOSTER.`);
   } catch (e) {
     console.error("TikTok OAuth callback", e);
     return html("TikTok connection not completed", e instanceof Error ? e.message : "Unexpected server error.");
