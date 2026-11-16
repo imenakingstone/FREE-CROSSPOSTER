@@ -20,6 +20,7 @@ export default function App() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const [mode, setMode] = useState('login')
+  const [showAuth, setShowAuth] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -281,7 +282,7 @@ export default function App() {
 
   if (!isSupabaseConfigured) return <SetupMessage />
   if (loading) return <main className="center-screen"><div className="loader" />Loading FREE CROSSPOSTER…</main>
-  if (!session) return <AuthScreen mode={mode} setMode={setMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} displayName={displayName} setDisplayName={setDisplayName} busy={authBusy} notice={notice} onSubmit={handleAuth} />
+  if (!session) return showAuth ? <AuthScreen mode={mode} setMode={setMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} displayName={displayName} setDisplayName={setDisplayName} busy={authBusy} notice={notice} onSubmit={handleAuth} /> : <LandingPage onGetStarted={() => { setMode('signup'); setShowAuth(true) }} onSignIn={() => { setMode('login'); setShowAuth(true) }} />
 
   const activeTitle = navItems.find(item => item.id === activeView)?.label || 'Overview'
   return <main className="dashboard socialync-shell">
@@ -441,3 +442,52 @@ function SettingsView({profile,setProfile,settings,setSettings,onProfileSave,onS
   return <><PageHeader eyebrow="WORKSPACE PREFERENCES" title="Settings." description="Manage your profile, timezone and notification preferences."/><div className="dashboard-grid settings-grid"><form className="card" onSubmit={onProfileSave}><h2>Profile</h2><p className="muted small">Your account details.</p><label>Email address<input value={email} disabled/></label><label>Display name<input value={profile.display_name} onChange={e=>setProfile(p=>({...p,display_name:e.target.value}))} placeholder="Your name"/></label><label>Avatar URL<input value={profile.avatar_url} onChange={e=>setProfile(p=>({...p,avatar_url:e.target.value}))} placeholder="https://…"/></label><button className="primary-btn full" disabled={busy}>Save profile <Save size={15}/></button></form><form className="card" onSubmit={onSettingsSave}><h2>Preferences</h2><p className="muted small">Choose how your workspace behaves. In-app alerts appear in the bell menu; email delivery still needs an email provider.</p><label>Timezone<select value={settings.timezone} onChange={e=>setSettings(s=>({...s,timezone:e.target.value}))}><option>Africa/Kigali</option><option>Africa/Nairobi</option><option>UTC</option><option>Europe/London</option></select></label>{[['email_notifications','Email notifications (delivery not enabled)'],['publish_success_notifications','Successful publishing alerts'],['publish_failure_notifications','Failed publishing alerts'],['weekly_summary','Weekly summary']].map(([key,label])=><label className="toggle-row" key={key}><span>{label}</span><input type="checkbox" checked={!!settings[key]} onChange={e=>setSettings(s=>({...s,[key]:e.target.checked}))}/></label>)}<button className="primary-btn full" disabled={busy}>Save preferences <Save size={15}/></button></form></div><section className="card security-card"><h2>Security</h2><p className="muted small">Social access tokens are stored encrypted by the server. You can revoke a social connection from Connected accounts. Use a unique password for your FREE CROSSPOSTER account.</p><button type="button" className="secondary-action" onClick={onPasswordReset}>Send password reset email</button><div className="settings-api-note"><strong>Platform API credentials</strong><span>Meta and TikTok app secrets stay in Supabase Edge Function secrets. They are never stored in browser settings or exposed in this page.</span></div></section></>
 }
 function SetupMessage(){return <main className="center-screen"><div className="setup-card"><span className="brand-icon">FC</span><h1>Connect your Supabase project</h1><p className="muted">Create a local <code>.env</code> file using <code>.env.example</code>, then add your Supabase URL and publishable key.</p></div></main>}
+
+
+function LandingPage({ onGetStarted, onSignIn }) {
+  return <main className="landing-page">
+    <header className="landing-nav">
+      <a className="landing-brand" href="#home"><span className="brand-icon">FC</span> FREE CROSSPOSTER</a>
+      <nav><a href="#features">Features</a><a href="#how-it-works">How it works</a><a href="/terms.html">Terms</a><a href="/privacy.html">Privacy</a></nav>
+      <div className="landing-actions"><button className="landing-signin" onClick={onSignIn}>Sign in</button><button className="landing-nav-cta" onClick={onGetStarted}>Get started <span>↗</span></button></div>
+    </header>
+    <section className="landing-hero" id="home">
+      <div className="landing-glow landing-glow-one"/><div className="landing-glow landing-glow-two"/>
+      <div className="landing-hero-copy">
+        <span className="landing-eyebrow"><i/> ONE WORKFLOW. MULTIPLE CHANNELS.</span>
+        <h1>Create once.<br/><em>Show up everywhere.</em></h1>
+        <p>Plan, organize and publish your social content from one calm, powerful workspace. Spend less time switching apps and more time creating.</p>
+        <div className="landing-hero-buttons"><button className="landing-primary" onClick={onGetStarted}>Start for free <span>→</span></button><a className="landing-secondary" href="#how-it-works">See how it works <span>↓</span></a></div>
+        <div className="landing-proof"><span>✓</span> Your content stays yours <b>·</b> Connect accounts when you're ready</div>
+      </div>
+      <div className="landing-visual" aria-label="Animated preview of the publishing workspace">
+        <div className="orbit orbit-one"/><div className="orbit orbit-two"/>
+        <div className="preview-window">
+          <div className="preview-top"><span className="preview-dots"><i/><i/><i/></span><b>YOUR WORKSPACE</b><span className="preview-live">● LIVE</span></div>
+          <div className="preview-body"><aside className="preview-side"><span className="preview-logo">FC</span><i/><i/><i/><i/><i/></aside>
+            <div className="preview-main"><small>CONTENT OVERVIEW</small><h3>Your content, organized.</h3><div className="preview-stats"><span><b>Posts</b><strong>12</strong></span><span><b>Channels</b><strong>02</strong></span><span><b>Scheduled</b><strong>04</strong></span></div>
+              <div className="preview-post"><div className="preview-thumb"><span>✦</span></div><div><b>Weekend story</b><small>Ready for your channels</small><div className="preview-tags"><i>Instagram</i><i>TikTok</i></div></div><span className="preview-check">✓</span></div>
+              <div className="preview-timeline"><span/><span/><span/><span/><span/><span/><span/></div>
+            </div>
+          </div>
+        </div>
+        <div className="float-chip chip-ai"><span>✦</span> AI ideas <b>soon</b></div>
+        <div className="float-chip chip-calendar"><span>▦</span> Content calendar</div>
+        <div className="float-chip chip-social"><span>◎</span><span>♪</span> Connected channels</div>
+      </div>
+    </section>
+    <section className="landing-strip"><span>MADE FOR CREATORS & SMALL TEAMS</span><b>Instagram</b><b>TikTok</b><b>One simple workflow</b></section>
+    <section className="landing-section" id="features"><div className="landing-section-heading"><span className="landing-eyebrow">LESS CHAOS, MORE CREATING</span><h2>Everything you need to stay<br/><em>consistent online.</em></h2><p>A practical toolkit for planning and publishing without juggling a dozen tabs.</p></div>
+      <div className="landing-feature-grid">
+        <article className="landing-feature feature-lime"><span className="feature-symbol">▤</span><h3>One content studio</h3><p>Prepare captions and upload photos or videos, then choose the channels you want to target.</p><small>CREATE · ORGANIZE · PUBLISH</small></article>
+        <article className="landing-feature feature-violet"><span className="feature-symbol">▦</span><h3>Plan ahead</h3><p>Keep drafts and publishing activity organized, with a calendar for supported scheduled posts.</p><small>CALENDAR · DRAFTS · HISTORY</small></article>
+        <article className="landing-feature feature-blue"><span className="feature-symbol">✧</span><h3>Smarter content ideas</h3><p>AI-powered hashtag and caption suggestions are planned to help you discover relevant ideas for each post.</p><small>AI ASSISTANCE · COMING SOON</small></article>
+      </div>
+    </section>
+    <section className="landing-how" id="how-it-works"><div><span className="landing-eyebrow">A SIMPLE WORKFLOW</span><h2>From idea to<br/><em>published.</em></h2><p>Start with one post. Add your channels. Keep your publishing workflow in one place.</p><button className="landing-primary" onClick={onGetStarted}>Build your workspace <span>→</span></button></div>
+      <div className="landing-steps"><article><span>01</span><div><h3>Create your account</h3><p>Sign up securely and open your personal publishing workspace.</p></div><b>↗</b></article><article><span>02</span><div><h3>Connect your channels</h3><p>Authorize the social accounts you want to manage. You stay in control of access.</p></div><b>↗</b></article><article><span>03</span><div><h3>Create and publish</h3><p>Upload your media, write a caption, choose destinations and publish where supported.</p></div><b>↗</b></article></div>
+    </section>
+    <section className="landing-cta"><span className="landing-eyebrow">YOUR NEXT POST STARTS HERE</span><h2>Make consistency<br/><em>feel effortless.</em></h2><button className="landing-primary" onClick={onGetStarted}>Get started for free <span>→</span></button></section>
+    <footer className="landing-footer"><a className="landing-brand" href="#home"><span className="brand-icon">FC</span> FREE CROSSPOSTER</a><span>© 2026 FREE CROSSPOSTER</span><div><a href="/terms.html">Terms of Service</a><a href="/privacy.html">Privacy Policy</a><a href="mailto:imenaking@gmail.com">Contact</a></div></footer>
+  </main>
+}
