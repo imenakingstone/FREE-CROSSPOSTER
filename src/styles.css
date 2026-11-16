@@ -162,3 +162,18 @@
 @keyframes chip-float{0%,100%{translate:0 0}50%{translate:0 -9px}}
 @media(max-width:850px){.landing-nav{padding:0 20px}.landing-nav nav{display:none}.landing-hero{grid-template-columns:1fr;padding:55px 22px 65px}.landing-hero-copy{max-width:650px}.landing-visual{min-height:380px}.landing-strip{gap:18px;flex-wrap:wrap;padding:18px}.landing-section{padding:75px 22px}.landing-feature-grid{grid-template-columns:1fr}.landing-feature{min-height:200px}.landing-how{padding:75px 22px;grid-template-columns:1fr;gap:35px}.landing-footer{padding:25px 22px;flex-wrap:wrap}.landing-footer div{width:100%;justify-content:space-between}}
 @media(max-width:520px){.landing-nav{height:70px}.landing-brand{font-size:10px}.landing-actions{gap:6px}.landing-nav-cta{padding:11px 12px;font-size:10px}.landing-hero h1{letter-spacing:-2.5px}.landing-hero-copy>p{font-size:13px}.landing-hero-buttons{gap:15px}.landing-proof{line-height:1.8}.landing-visual{min-height:310px;scale:.88;margin:-15px -20px}.preview-window{width:100%}.chip-ai{right:-5px}.chip-calendar{left:-4px}.chip-social{right:0}.orbit{width:350px;height:250px}.landing-strip{font-size:8px}.landing-strip b{font-size:10px}.landing-footer>span{order:3;width:100%}}
+
+
+/* AI hashtag suggestions */
+.ai-hashtag-panel{margin:16px 0 22px;padding:16px;border:1px solid #34415a;border-radius:12px;background:linear-gradient(135deg,#17243a,#111a2b)}
+.ai-hashtag-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.ai-hashtag-heading>div{display:grid;gap:5px}
+.ai-hashtag-heading strong{display:flex;align-items:center;gap:8px;font-size:13px;color:#e9eff9}
+.ai-hashtag-heading strong svg{color:#b5f17d}
+.ai-hashtag-heading span{font-size:10px;color:#94a2b9}
+.ai-hashtag-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}
+.ai-hashtag-chips button{border:1px solid #41516c;border-radius:20px;background:#1b2a40;color:#dce7f8;padding:7px 10px;font-size:11px;cursor:pointer}
+.ai-hashtag-chips button:hover{border-color:#b5f17d;color:#c9f69b}
+.ai-hashtag-chips button span{margin-left:8px;color:#b5f17d;font-weight:800}
+.ai-hashtag-panel .fine-print{margin:12px 0 0}
+@media(max-width:560px){.ai-hashtag-heading{align-items:flex-start}.ai-hashtag-heading .secondary-action{width:100%;justify-content:center}}
