@@ -41,7 +41,7 @@ Deno.serve(async (req: Request) => {
   const requiredSecrets = [
     "TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET",
     "TIKTOK_SANDBOX_CLIENT_KEY", "TIKTOK_SANDBOX_CLIENT_SECRET",
-    "META_APP_ID", "META_APP_SECRET", "TOKEN_ENCRYPTION_KEY", "OPENAI_API_KEY",
+    "META_APP_SECRET", "TOKEN_ENCRYPTION_KEY", "OPENAI_API_KEY",
   ];
   const presentSecrets = requiredSecrets.filter((name) => Boolean(Deno.env.get(name)));
   const missingSecrets = requiredSecrets.filter((name) => !Deno.env.get(name));
@@ -65,7 +65,8 @@ Deno.serve(async (req: Request) => {
     checks.push({ id: "database", title: "Database connectivity", status: "healthy", summary: "The database health snapshot was collected successfully.", details: { sizeBytes: snapshot?.database_size_bytes, checkedAt: snapshot?.checked_at } });
     const tables = Array.isArray(snapshot?.tables) ? snapshot.tables : [];
     const rlsOff = tables.filter((t: any) => t.schema === "public" && !t.rls_enabled);
-    const publicNoPolicies = tables.filter((t: any) => t.schema === "public" && t.rls_enabled && Number(t.policy_count) === 0);
+    const serverOnlyTables = ["meta_oauth_states"];
+    const publicNoPolicies = tables.filter((t: any) => t.schema === "public" && !serverOnlyTables.includes(t.name) && t.rls_enabled && Number(t.policy_count) === 0);
     checks.push({
       id: "rls", title: "Row Level Security",
       status: rlsOff.length ? "critical" : publicNoPolicies.length ? "warning" : "healthy",
