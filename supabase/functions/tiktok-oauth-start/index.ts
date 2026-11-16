@@ -7,7 +7,7 @@ Deno.serve(async(req:Request)=>{
     const h=req.headers.get("Authorization");
     if(!h)throw new Error("Sign in first.");
     const url=Deno.env.get("SUPABASE_URL")!,anon=Deno.env.get("SUPABASE_ANON_KEY")!,service=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const c=createClient(url,anon,{global:{headers:{Authorization:h}});
+    const c=createClient(url,anon,{global:{headers:{Authorization:h}}});
     const {data,error}=await c.auth.getUser();
     if(error||!data.user)throw new Error("Session expired.");
     const body=await req.json().catch(()=>({}));
