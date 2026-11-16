@@ -160,7 +160,11 @@ export default function App() {
     setBusy(true); setNotice('')
     try {
       const { data, error } = await supabase.functions.invoke(platform + '-oauth-start', { body: { environment } })
-      if (error) throw error
+      if (error) {
+        let details = null
+        try { details = await error.context?.json() } catch {}
+        throw new Error(details?.error || data?.error || error.message || platform + ' authorization could not start.')
+      }
       if (!data?.url) throw new Error(data?.error || platform + ' authorization could not start.')
       window.location.assign(data.url)
     } catch (error) { setNotice(error.message || 'Could not start ' + platform + ' authorization.'); setBusy(false) }
