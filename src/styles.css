@@ -181,3 +181,35 @@
 
 /* Official-style platform marks and FREE CROSSPOSTER identity */
 .crossposter-logo{background:linear-gradient(145deg,#c8ff8c,#86d85b);color:#102013;box-shadow:0 5px 18px #a4ed7130}.crossposter-logo svg{width:27px;height:27px}.platform-mark{overflow:hidden}.platform-logo{width:19px;height:19px;display:block}.platform-mark.instagram{background:linear-gradient(135deg,#7438a7,#e34b70,#f0a33b);color:#fff}.platform-mark.tiktok{background:#080a0f;color:#fff;border:1px solid #3b5363}.platform-mark.youtube{background:#ff0033;color:#fff}.platform-mark.youtube .platform-logo{width:20px;height:20px}
+
+
+/* Administrator-only Supabase health dashboard */
+.system-health-page{display:flex;flex-direction:column;gap:18px}
+.health-empty{padding:42px 24px;text-align:center;display:flex;align-items:center;flex-direction:column;gap:10px}
+.health-empty h2{margin:4px 0}
+.health-empty p{max-width:520px;margin:0}
+.health-summary{display:flex;align-items:center;justify-content:space-between;gap:22px;padding:22px 24px;border:1px solid var(--border,#263247);border-radius:16px;background:var(--card,#111a2b)}
+.health-summary>div:first-child{display:flex;flex-direction:column;gap:5px}
+.health-summary>div:first-child span,.health-summary small{color:var(--muted,#94a3b8);font-size:12px}
+.health-summary strong{font-size:25px}
+.health-summary.critical{border-color:#ef4444}
+.health-summary.warning{border-color:#d69e36}
+.health-counts{display:flex;flex-wrap:wrap;gap:14px 20px}
+.health-counts span{font-size:12px;color:var(--muted,#94a3b8)}
+.health-counts b{color:var(--text,#fff);font-size:17px;margin-right:4px}
+.health-check-list{display:grid;gap:12px}
+.health-check{padding:20px}
+.health-check-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.health-check h2{font-size:16px;margin:0 0 6px}
+.health-check p{margin:0;color:var(--muted,#94a3b8);font-size:13px}
+.health-status{font-size:11px;font-weight:700;border-radius:999px;padding:6px 10px;white-space:nowrap;background:#1f2937;color:#cbd5e1}
+.health-status.healthy{background:#12372b;color:#86efac}
+.health-status.warning{background:#45320f;color:#fcd34d}
+.health-status.critical{background:#451a1a;color:#fca5a5}
+.health-status.info{background:#1e3a5f;color:#93c5fd}
+.health-details{margin-top:14px;padding-top:12px;border-top:1px solid var(--border,#263247);font-size:12px;color:var(--muted,#94a3b8)}
+.health-details ul{margin:8px 0;padding-left:20px}
+.health-details li{margin:5px 0}
+.health-details code{font-size:12px;color:var(--text,#fff)}
+.health-details .fine-print{margin-top:10px}
+@media(max-width:700px){.health-summary{align-items:flex-start;flex-direction:column}.health-counts{gap:10px 14px}.health-check-head{flex-direction:column}}
