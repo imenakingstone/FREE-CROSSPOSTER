@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
-import { LayoutDashboard, CalendarDays, FileText, History, Link2, Settings, LogOut, ImagePlus, Send, ShieldCheck, Video, Instagram, Trash2, Clock3, Plus, Save, X, RefreshCw, Bell, CheckCheck } from 'lucide-react'
+import { LayoutDashboard, CalendarDays, FileText, History, Link2, Settings, LogOut, ImagePlus, Send, ShieldCheck, Video, Instagram, Trash2, Clock3, Plus, Save, X, RefreshCw, Bell, CheckCheck, Sparkles } from 'lucide-react'
 
 const platforms = [
   { id: 'instagram', label: 'Instagram', mark: 'IG' },
@@ -37,6 +37,8 @@ export default function App() {
   const [profile, setProfile] = useState({ display_name: '', avatar_url: '' })
   const [settings, setSettings] = useState({ timezone: 'Africa/Kigali', email_notifications: true, publish_success_notifications: true, publish_failure_notifications: true, weekly_summary: false })
   const [busy, setBusy] = useState(false)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [hashtagSuggestions, setHashtagSuggestions] = useState([])
   const [caption, setCaption] = useState('')
   const [file, setFile] = useState(null)
   const [selectedPlatforms, setSelectedPlatforms] = useState(['instagram'])
@@ -167,6 +169,32 @@ export default function App() {
     } catch (error) { setNotice(error.message || (platform + ' publishing failed.')); await refreshWorkspace() }
     finally { setPublishingPostId(null) }
   }
+  async function suggestHashtags() {
+    if (!caption.trim()) return setNotice('Write a caption first so AI can suggest relevant hashtags.')
+    if (!selectedPlatforms.length) return setNotice('Choose at least one platform first.')
+    setAiLoading(true); setNotice('')
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-hashtags', {
+        body: { caption: caption.trim(), platforms: selectedPlatforms }
+      })
+      if (error) throw error
+      if (data?.error) throw new Error(data.error)
+      const tags = Array.isArray(data?.hashtags) ? data.hashtags : []
+      if (!tags.length) throw new Error('No hashtag suggestions were returned. Try a more detailed caption.')
+      setHashtagSuggestions(tags)
+      setNotice('AI prepared hashtag ideas. Choose the ones you want to add.')
+    } catch (error) {
+      setNotice(error.message || 'Could not generate hashtag suggestions.')
+    } finally { setAiLoading(false) }
+  }
+  function addSuggestedHashtag(tag) {
+    const clean = String(tag || '').trim()
+    if (!clean) return
+    const existing = caption.match(/#[\\p{L}\\p{N}_]+/gu) || []
+    if (existing.some(item => item.toLowerCase() === clean.toLowerCase())) return
+    setCaption(current => (current.trim() ? current.trim() + ' ' : '') + clean)
+  }
+
   async function createDraft(event) {
     event.preventDefault()
     if (!caption.trim() && !file) return setNotice('Add a caption or choose a photo/video first.')
@@ -296,7 +324,7 @@ export default function App() {
       <header className="topbar"><div><span className="topbar-kicker">YOUR WORKSPACE</span><strong>{activeTitle}</strong></div><div className="user-area"><span className="user-email">{session.user.email}</span><div className="notification-wrap"><button className="icon-btn notification-trigger" onClick={()=>setNotificationOpen(v=>!v)} title="Notifications"><Bell size={17}/>{notifications.some(n=>!n.read_at)&&<i/>}</button>{notificationOpen&&<div className="notification-panel"><div className="notification-heading"><strong>Notifications</strong><button onClick={markAllNotificationsRead}><CheckCheck size={13}/> Mark all read</button></div>{notifications.map(item=><button key={item.id} className={'notification-item '+(!item.read_at?'unread':'')} onClick={()=>markNotificationRead(item)}><strong>{item.title}</strong><span>{item.body}</span><small>{new Date(item.created_at).toLocaleString()}</small></button>)}{!notifications.length&&<p className="empty-state">No notifications yet.</p>}</div>}</div><button className="icon-btn" onClick={refreshWorkspace} title="Refresh workspace"><RefreshCw size={17}/></button></div></header>
       <div className="dashboard-content">
         {activeView === 'overview' && <Overview posts={posts} accounts={socialAccounts} schedules={schedules} logs={logs} onNavigate={setActiveView} />}
-        {activeView === 'create' && <CreatePost caption={caption} setCaption={setCaption} file={file} setFile={setFile} selectedPlatforms={selectedPlatforms} setSelectedPlatforms={setSelectedPlatforms} onSubmit={createDraft} busy={busy} />}
+        {activeView === 'create' && <CreatePost caption={caption} setCaption={setCaption} file={file} setFile={setFile} selectedPlatforms={selectedPlatforms} setSelectedPlatforms={setSelectedPlatforms} onSubmit={createDraft} busy={busy} onSuggestHashtags={suggestHashtags} aiLoading={aiLoading} hashtagSuggestions={hashtagSuggestions} onAddHashtag={addSuggestedHashtag} />}
         {activeView === 'drafts' && <Drafts posts={draftPosts} destinations={postDestinations} accounts={socialAccounts} onDelete={deleteDraft} onSave={saveCaption} onPublish={publishDestination} onAssignAccount={assignDestinationAccount} publishingPostId={publishingPostId} />}
         {activeView === 'calendar' && <CalendarView posts={posts} schedules={schedules} onSchedule={schedulePost} onCancel={cancelSchedule} busy={busy} schedulePostId={schedulePostId} setSchedulePostId={setSchedulePostId} destinationId={scheduleDestinationId} setDestinationId={setScheduleDestinationId} scheduleAt={scheduleAt} setScheduleAt={setScheduleAt} destinations={destRows} />}
         {activeView === 'history' && <HistoryView logs={logs} posts={posts} />}
@@ -317,8 +345,8 @@ function Overview({posts,accounts,schedules,logs,onNavigate}) {
   const stats=[['Total posts',posts.length],['Connected accounts',connected],['Scheduled',schedules.filter(s=>s.status==='scheduled').length],['Published events',logs.filter(l=>l.status==='published').length]]
   return <><PageHeader eyebrow="YOUR PUBLISHING WORKSPACE" title="Good to see you." description="A clear view of your content and connected channels." action={<span className="status-pill"><span/> Workspace ready</span>}/><div className="stats-grid">{stats.map(([label,value])=><div className="card stat-card" key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><div className="dashboard-grid overview-grid"><section className="card"><div className="section-heading"><div><h2>Quick actions</h2><p className="muted small">Pick up where you left off.</p></div></div><div className="quick-actions"><button className="quick-action" onClick={()=>onNavigate('create')}><Plus/>Create a post</button><button className="quick-action" onClick={()=>onNavigate('calendar')}><CalendarDays/>Schedule content</button><button className="quick-action" onClick={()=>onNavigate('accounts')}><Link2/>Connect an account</button></div></section><section className="card"><div className="section-heading"><div><h2>Channels</h2><p className="muted small">Connection status</p></div></div>{platforms.map(p=><div className="channel-row" key={p.id}><span className={'platform-mark '+p.id}>{p.mark}</span><span>{p.label}</span><span className="not-connected">{accounts.filter(a=>a.platform===p.id&&a.account_status==='connected').length} connected</span></div>)}</section></div><section className="card recent-card"><div className="section-heading"><div><h2>Recent content</h2><p className="muted small">Your latest posts.</p></div><button className="text-action" onClick={()=>onNavigate('drafts')}>View drafts</button></div>{posts.slice(0,5).map(p=><div className="simple-row" key={p.id}><div><strong>{p.caption || 'Media-only post'}</strong><span>{new Date(p.created_at).toLocaleString()}</span></div><span className="draft-status">{p.status}</span></div>)}{!posts.length&&<div className="empty-state">No posts yet. Create your first post.</div>}</section></>
 }
-function CreatePost({caption,setCaption,file,setFile,selectedPlatforms,setSelectedPlatforms,onSubmit,busy}) {
-  return <><PageHeader eyebrow="CONTENT STUDIO" title="Create a post." description="Prepare your content once and choose where it should go."/><div className="card composer"><form onSubmit={onSubmit}><label>Caption<textarea rows="6" value={caption} onChange={e=>setCaption(e.target.value)} placeholder="Write your caption…"/></label><label className="upload-zone"><input type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm" onChange={e=>setFile(e.target.files?.[0]||null)}/>{file?<><div className="upload-icon"><Video/></div><strong>{file.name}</strong><span>{(file.size/1024/1024).toFixed(1)} MB · click to replace</span></>:<><div className="upload-icon"><ImagePlus/></div><strong>Add a photo or video</strong><span>JPEG, PNG, WebP, GIF, MP4, MOV or WebM · max 50 MB</span></>}</label><div className="destination-block"><div className="destination-title"><span>Choose destinations</span><span className="muted tiny">Publishing requires an authorized account</span></div><div className="platform-list">{platforms.map(p=><button type="button" key={p.id} disabled={false} className={'platform-choice '+(selectedPlatforms.includes(p.id)?'selected':'')+''} onClick={()=>setSelectedPlatforms(current=>current.includes(p.id)?current.filter(x=>x!==p.id):[...current,p.id])}><span className={'platform-mark '+p.id}>{p.mark}</span>{p.label}{p.id==='tiktok'&&<small>Video posts</small>}<span className="check">{selectedPlatforms.includes(p.id)?'✓':p.id==='instagram'?'+':'—'}</span></button>)}</div></div><button className="primary-btn full" disabled={busy}>{busy?'Saving…':'Save post draft'} <Send size={16}/></button></form></div></>
+function CreatePost({caption,setCaption,file,setFile,selectedPlatforms,setSelectedPlatforms,onSubmit,busy,onSuggestHashtags,aiLoading,hashtagSuggestions,onAddHashtag}) {
+  return <><PageHeader eyebrow="CONTENT STUDIO" title="Create a post." description="Prepare your content once and choose where it should go."/><div className="card composer"><form onSubmit={onSubmit}><label>Caption<textarea rows="6" value={caption} onChange={e=>setCaption(e.target.value)} placeholder="Write your caption…"/></label><section className="ai-hashtag-panel"><div className="ai-hashtag-heading"><div><strong><Sparkles size={15}/> AI hashtag ideas</strong><span>Suggestions based on your caption and selected platforms</span></div><button type="button" className="secondary-action" onClick={onSuggestHashtags} disabled={aiLoading||!caption.trim()}>{aiLoading?'Thinking…':'Suggest hashtags'}</button></div>{hashtagSuggestions.length>0&&<div className="ai-hashtag-chips">{hashtagSuggestions.map(tag=><button type="button" key={tag} onClick={()=>onAddHashtag(tag)} title="Add this hashtag to your caption">{tag}<span>+</span></button>)}</div>}<p className="fine-print">AI suggestions are ideas, not live trend data or a promise of viral reach.</p></section><label className="upload-zone"><input type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm" onChange={e=>setFile(e.target.files?.[0]||null)}/>{file?<><div className="upload-icon"><Video/></div><strong>{file.name}</strong><span>{(file.size/1024/1024).toFixed(1)} MB · click to replace</span></>:<><div className="upload-icon"><ImagePlus/></div><strong>Add a photo or video</strong><span>JPEG, PNG, WebP, GIF, MP4, MOV or WebM · max 50 MB</span></>}</label><div className="destination-block"><div className="destination-title"><span>Choose destinations</span><span className="muted tiny">Publishing requires an authorized account</span></div><div className="platform-list">{platforms.map(p=><button type="button" key={p.id} disabled={false} className={'platform-choice '+(selectedPlatforms.includes(p.id)?'selected':'')+''} onClick={()=>setSelectedPlatforms(current=>current.includes(p.id)?current.filter(x=>x!==p.id):[...current,p.id])}><span className={'platform-mark '+p.id}>{p.mark}</span>{p.label}{p.id==='tiktok'&&<small>Video posts</small>}<span className="check">{selectedPlatforms.includes(p.id)?'✓':p.id==='instagram'?'+':'—'}</span></button>)}</div></div><button className="primary-btn full" disabled={busy}>{busy?'Saving…':'Save post draft'} <Send size={16}/></button></form></div></>
 }
 function Drafts({posts,destinations,accounts,onDelete,onSave,onPublish,onAssignAccount,publishingPostId}) {
   const [edits,setEdits]=useState({})
