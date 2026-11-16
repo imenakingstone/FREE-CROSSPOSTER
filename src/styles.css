@@ -177,3 +177,7 @@
 .ai-hashtag-chips button span{margin-left:8px;color:#b5f17d;font-weight:800}
 .ai-hashtag-panel .fine-print{margin:12px 0 0}
 @media(max-width:560px){.ai-hashtag-heading{align-items:flex-start}.ai-hashtag-heading .secondary-action{width:100%;justify-content:center}}
+
+
+/* Official-style platform marks and FREE CROSSPOSTER identity */
+.crossposter-logo{background:linear-gradient(145deg,#c8ff8c,#86d85b);color:#102013;box-shadow:0 5px 18px #a4ed7130}.crossposter-logo svg{width:27px;height:27px}.platform-mark{overflow:hidden}.platform-logo{width:19px;height:19px;display:block}.platform-mark.instagram{background:linear-gradient(135deg,#7438a7,#e34b70,#f0a33b);color:#fff}.platform-mark.tiktok{background:#080a0f;color:#fff;border:1px solid #3b5363}.platform-mark.youtube{background:#ff0033;color:#fff}.platform-mark.youtube .platform-logo{width:20px;height:20px}
