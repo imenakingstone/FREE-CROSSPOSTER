@@ -75,7 +75,7 @@ export default function App() {
     if (error) setNotice(error.message); else setPosts(data || [])
   }
   async function loadAccounts() {
-    const { data, error } = await supabase.from('social_accounts').select('id,platform,platform_user_id,username,display_name,account_status,token_expires_at,connected_at').order('connected_at', { ascending: false })
+    const { data, error } = await supabase.from('social_accounts').select('id,platform,platform_user_id,username,display_name,account_status,token_expires_at,connected_at,environment').order('connected_at', { ascending: false })
     if (error) setNotice(error.message); else setSocialAccounts(data || [])
   }
   async function loadDestinations() {
@@ -148,10 +148,10 @@ export default function App() {
     } catch (error) { setNotice(error.message || 'Instagram publishing failed.'); await refreshWorkspace() }
     finally { setPublishingPostId(null) }
   }
-  async function connectPlatform(platform) {
+  async function connectPlatform(platform, environment = 'production') {
     setBusy(true); setNotice('')
     try {
-      const { data, error } = await supabase.functions.invoke(platform + '-oauth-start', { body: {} })
+      const { data, error } = await supabase.functions.invoke(platform + '-oauth-start', { body: { environment } })
       if (error) throw error
       if (!data?.url) throw new Error(data?.error || platform + ' authorization could not start.')
       window.location.assign(data.url)
@@ -328,7 +328,7 @@ export default function App() {
         {activeView === 'drafts' && <Drafts posts={draftPosts} destinations={postDestinations} accounts={socialAccounts} onDelete={deleteDraft} onSave={saveCaption} onPublish={publishDestination} onAssignAccount={assignDestinationAccount} publishingPostId={publishingPostId} />}
         {activeView === 'calendar' && <CalendarView posts={posts} schedules={schedules} onSchedule={schedulePost} onCancel={cancelSchedule} busy={busy} schedulePostId={schedulePostId} setSchedulePostId={setSchedulePostId} destinationId={scheduleDestinationId} setDestinationId={setScheduleDestinationId} scheduleAt={scheduleAt} setScheduleAt={setScheduleAt} destinations={destRows} />}
         {activeView === 'history' && <HistoryView logs={logs} posts={posts} />}
-        {activeView === 'accounts' && <Accounts accounts={socialAccounts} onConnect={connectInstagram} onConnectTikTok={() => connectPlatform('tiktok')} onDisconnect={disconnectAccount} busy={busy} />}
+        {activeView === 'accounts' && <Accounts accounts={socialAccounts} onConnect={connectInstagram} onConnectTikTok={() => connectPlatform('tiktok', 'production')} onConnectTikTokSandbox={() => connectPlatform('tiktok', 'sandbox')} onDisconnect={disconnectAccount} busy={busy} />}
         {activeView === 'settings' && <SettingsView profile={profile} setProfile={setProfile} settings={settings} setSettings={setSettings} onProfileSave={saveProfile} onSettingsSave={saveSettings} onPasswordReset={sendPasswordReset} busy={busy} email={session.user.email} />}
         {notice && <p className="notice workspace-notice">{notice}</p>}
       </div>
@@ -445,13 +445,13 @@ function HistoryView({logs,posts}) {
   const postMap=new Map(posts.map(p=>[p.id,p]))
   return <><PageHeader eyebrow="ACTIVITY" title="Publishing history." description="Review publishing events and errors recorded by connected platforms."/><section className="card"><div className="history-list">{logs.map(log=><div className="simple-row" key={log.id}><div><strong>{postMap.get(log.post_id)?.caption||'Post activity'} · {log.platform}</strong><span>{new Date(log.created_at).toLocaleString()} · {log.message||'No additional details'}</span></div><span className={'draft-status '+(log.status==='published'?'success-status':'')}>{log.status}</span></div>)}{!logs.length&&<div className="empty-state">No publishing events have been recorded yet.</div>}</div></section></>
 }
-function Accounts({accounts,onConnect,onConnectTikTok,onDisconnect,busy}) {
+function Accounts({accounts,onConnect,onConnectTikTok,onConnectTikTokSandbox,onDisconnect,busy}) {
   return <><PageHeader eyebrow="YOUR SOCIAL CHANNELS" title="Connected accounts." description="Manage Instagram and TikTok now; YouTube connection is being prepared."/><div className="accounts-grid">
     {platforms.map(p=><article className="account-card card" key={p.id}>
       <div className="account-card-top"><span className={'platform-mark '+p.id}>{p.mark}</span><span className="account-status pending">{accounts.filter(a=>a.platform===p.id&&a.account_status==='connected').length} connected</span></div>
       <h2>{p.label}</h2>
       <p className="muted small">{p.id==='instagram'?'Meta login for professional Instagram accounts.':'TikTok Content Posting API for video publishing.'}</p>
-      {accounts.filter(a=>a.platform===p.id).map(a=><div className="channel-row" key={a.id}><span>{a.username?'@'+a.username:a.display_name||a.platform_user_id}</span><button className="danger-action" onClick={()=>onDisconnect(a)}><Trash2 size={13}/> Disconnect</button></div>)}
+      {accounts.filter(a=>a.platform===p.id).map(a=><div className="channel-row" key={a.id}><span>{a.username?'@'+a.username:a.display_name||a.platform_user_id}{a.platform==='tiktok'&&a.environment==='sandbox'?' · Sandbox':''}</span><button className="danger-action" onClick={()=>onDisconnect(a)}><Trash2 size={13}/> Disconnect</button></div>)}
       <button className="primary-btn full" onClick={p.id==='instagram'?onConnect:onConnectTikTok} disabled={busy}>
         Connect {p.label} {p.id==='instagram'?<Instagram size={16}/>:'♪'}
       </button>
