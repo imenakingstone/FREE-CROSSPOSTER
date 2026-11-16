@@ -13,8 +13,8 @@ Deno.serve(async(req:Request)=>{
     const body=await req.json().catch(()=>({}));
     const environment=body?.environment==="sandbox"?"sandbox":"production";
     const prefix=environment==="sandbox"?"TIKTOK_SANDBOX":"TIKTOK";
-    const key=Deno.env.get(prefix+"_CLIENT_KEY");
-    const secret=Deno.env.get(prefix+"_CLIENT_SECRET");
+    const key=(Deno.env.get(prefix+"_CLIENT_KEY")||"").trim();
+    const secret=(Deno.env.get(prefix+"_CLIENT_SECRET")||"").trim();
     if(!key||!secret)throw new Error(environment==="sandbox"?"Add TIKTOK_SANDBOX_CLIENT_KEY and TIKTOK_SANDBOX_CLIENT_SECRET to Supabase Edge Function secrets first.":"TikTok Client Key and Client Secret must be added to Supabase Edge Function secrets first.");
     const nonce=crypto.randomUUID();
     const admin=createClient(url,service);
@@ -24,7 +24,11 @@ Deno.serve(async(req:Request)=>{
     const u=new URL("https://www.tiktok.com/v2/auth/authorize/");
     u.searchParams.set("client_key",key);
     u.searchParams.set("response_type","code");
-    u.searchParams.set("scope","user.info.basic,video.publish");
+    // Sandbox is used only to validate Login Kit/account connection. TikTok does not
+    // provide public Content Posting API access in Sandbox, so request basic profile
+    // access only. Production requests the Direct Post permission as well.
+    const scopes=environment==="sandbox"?"user.info.basic":"user.info.basic,video.publish";
+    u.searchParams.set("scope",scopes);
     u.searchParams.set("redirect_uri",redirect);
     u.searchParams.set("state",nonce);
     return Response.json({url:u.toString(),environment},{headers:cors});
