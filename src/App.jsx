@@ -455,7 +455,8 @@ function Accounts({accounts,onConnect,onConnectTikTok,onConnectTikTokSandbox,onD
       <button className="primary-btn full" onClick={p.id==='instagram'?onConnect:onConnectTikTok} disabled={busy}>
         Connect {p.label} {p.id==='instagram'?<Instagram size={16}/>:'♪'}
       </button>
-      {p.id==='tiktok'&&<p className="fine-print">Video publishing is implemented. TikTok app credentials and Content Posting API approval are required before account testing.</p>}
+      {p.id==='tiktok'&&<button className="primary-btn full" onClick={onConnectTikTokSandbox} disabled={busy}>Connect TikTok Sandbox ♪</button>}
+      {p.id==='tiktok'&&<p className="fine-print">Use Sandbox for private integration tests. Production connections remain separate.</p>}
     </article>)}
     <article className="account-card card">
       <div className="account-card-top"><span className="platform-mark youtube">YT</span><span className="account-status pending">Setup required</span></div>
