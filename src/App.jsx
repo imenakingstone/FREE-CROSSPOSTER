@@ -162,7 +162,7 @@ export default function App() {
     if (!session?.user?.id) return
     const { data, error } = await supabase.from('inbox_conversations')
       .select('id,platform,social_account_id,participant_id,participant_name,participant_username,last_message_text,last_message_at,last_inbound_at,unread_count,status')
-      .eq('user_id', session.user.id).order('last_message_at', { ascending: false }).limit(100)
+      .eq('user_id', session.user.id).eq('platform', 'instagram').order('last_message_at', { ascending: false }).limit(100)
     if (error) { setNotice(error.message); return }
     setInboxConversations(data || [])
     if (!activeConversationId && data?.length) setActiveConversationId(data[0].id)
@@ -270,15 +270,6 @@ export default function App() {
   }
   async function handleSignOut() { await supabase.auth.signOut(); setPosts([]); setSocialAccounts([]); setPostDestinations([]); setNotifications([]); setLogs([]); setSchedules([]) }
 
-  async function connectFacebook() {
-    setBusy(true); setNotice('')
-    try {
-      const { data, error } = await supabase.functions.invoke('facebook-oauth-start', { body: {} })
-      if (error) throw error
-      if (!data?.url) throw new Error(data?.error || 'Facebook authorization could not start.')
-      window.location.assign(data.url)
-    } catch (error) { setNotice(error.message || 'Could not start Facebook authorization.'); setBusy(false) }
-  }
   async function connectInstagram() {
     setBusy(true); setNotice('')
     try {
@@ -470,7 +461,7 @@ export default function App() {
         {activeView === 'calendar' && <CalendarView posts={posts} schedules={schedules} onSchedule={schedulePost} onCancel={cancelSchedule} busy={busy} schedulePostId={schedulePostId} setSchedulePostId={setSchedulePostId} destinationId={scheduleDestinationId} setDestinationId={setScheduleDestinationId} scheduleAt={scheduleAt} setScheduleAt={setScheduleAt} destinations={destRows} />}
         {activeView === 'history' && <HistoryView logs={logs} posts={posts} />}
         {activeView === 'inbox' && <InboxView conversations={inboxConversations} messages={inboxMessages} activeId={activeConversationId} onSelect={selectInboxConversation} draft={inboxDraft} setDraft={setInboxDraft} onSend={sendInboxMessage} loading={inboxLoading} sending={inboxSending} accounts={socialAccounts} />}
-        {activeView === 'accounts' && <Accounts accounts={socialAccounts} onConnect={connectInstagram} onConnectTikTok={() => connectPlatform('tiktok')} onConnectFacebook={connectFacebook} onDisconnect={disconnectAccount} busy={busy} />}
+        {activeView === 'accounts' && <Accounts accounts={socialAccounts} onConnect={connectInstagram} onConnectTikTok={() => connectPlatform('tiktok')} onDisconnect={disconnectAccount} busy={busy} />}
         {activeView === 'settings' && <SettingsView profile={profile} setProfile={setProfile} settings={settings} setSettings={setSettings} onProfileSave={saveProfile} onSettingsSave={saveSettings} onPasswordReset={sendPasswordReset} busy={busy} email={session.user.email} />}
         {activeView === 'system-health' && session.user.email?.toLowerCase() === 'imenaking12@gmail.com' && <SystemHealthView report={healthReport} loading={healthLoading} onScan={runSystemHealth} metrics={adminMetrics} metricsLoading={adminMetricsLoading} />}
         {notice && <p className="notice workspace-notice">{notice}</p>}
@@ -619,7 +610,7 @@ function HistoryView({logs,posts}) {
   const postMap=new Map(posts.map(p=>[p.id,p]))
   return <><PageHeader eyebrow="ACTIVITY" title="Publishing history." description="Review publishing events and errors recorded by connected platforms."/><section className="card"><div className="history-list">{logs.map(log=><div className="simple-row" key={log.id}><div><strong>{postMap.get(log.post_id)?.caption||'Post activity'} · {log.platform}</strong><span>{new Date(log.created_at).toLocaleString()} · {log.message||'No additional details'}</span></div><span className={'draft-status '+(log.status==='published'?'success-status':'')}>{log.status}</span></div>)}{!logs.length&&<div className="empty-state">No publishing events have been recorded yet.</div>}</div></section></>
 }
-function Accounts({accounts,onConnect,onConnectTikTok,onConnectFacebook,onDisconnect,busy}) {
+function Accounts({accounts,onConnect,onConnectTikTok,onDisconnect,busy}) {
   return <><PageHeader eyebrow="YOUR SOCIAL CHANNELS" title="Connected accounts." description="Manage Instagram and TikTok now; YouTube connection is being prepared."/><div className="accounts-grid">
     {platforms.map(p=><article className="account-card card" key={p.id}>
       <div className="account-card-top"><span className={'platform-mark '+p.id}><PlatformLogo platform={p.id} /></span><span className="account-status pending">{accounts.filter(a=>a.platform===p.id&&a.account_status==='connected').length} connected</span></div>
@@ -630,13 +621,6 @@ function Accounts({accounts,onConnect,onConnectTikTok,onConnectFacebook,onDiscon
         Connect {p.label} <PlatformLogo platform={p.id} />
       </button>
     </article>)}
-    <article className="account-card card messenger-account-card">
-      <div className="account-card-top"><span className="platform-mark facebook-mark"><span>f</span></span><span className="account-status pending">{accounts.filter(a=>a.platform==='facebook'&&a.account_status==='connected').length} connected</span></div>
-      <h2>Facebook Messenger</h2>
-      <p className="muted small">Connect a Facebook Page to receive and reply to customer messages in the Unified Inbox. Meta permissions and app review are required for public users.</p>
-      {accounts.filter(a=>a.platform==='facebook'&&a.environment==='production').map(a=><div className="channel-row" key={a.id}><span>{a.display_name||'Facebook Page'}</span><button className="danger-action" onClick={()=>onDisconnect(a)}><Trash2 size={13}/> Disconnect</button></div>)}
-      <button className="primary-btn full" onClick={onConnectFacebook} disabled={busy}>Connect Facebook Page</button>
-    </article>
     <article className="account-card card">
       <div className="account-card-top"><span className="platform-mark youtube"><PlatformLogo platform="youtube" /></span><span className="account-status pending">Setup required</span></div>
       <h2>YouTube</h2>
@@ -654,30 +638,28 @@ function Accounts({accounts,onConnect,onConnectTikTok,onConnectFacebook,onDiscon
   </div></>
 }
 function InboxView({conversations,messages,activeId,onSelect,draft,setDraft,onSend,loading,sending,accounts}) {
-  const [filter,setFilter]=useState('all')
   const active=conversations.find(item=>item.id===activeId)
-  const filtered=conversations.filter(item=>filter==='all'||item.platform===filter)
-  const connected=accounts.filter(item=>['instagram','facebook'].includes(item.platform)&&item.account_status==='connected').length
+  const connected=accounts.some(item=>item.platform==='instagram'&&item.account_status==='connected')
   const webhookUrl='https://apggccljgfodaxdpxptc.supabase.co/functions/v1/meta-messaging-webhook'
   return <section className="inbox-page">
-    <PageHeader eyebrow="CUSTOMER CONVERSATIONS" title="Unified inbox." description="Instagram DMs and Facebook Page messages together. Replies are limited to Meta's allowed messaging window."/>
-    {!connected && <div className="card inbox-setup-note"><MessageSquare size={22}/><div><strong>Connect a professional account to get started</strong><p className="muted small">Connect an Instagram professional account or a Facebook Page in Connected accounts. Personal Instagram profiles are not supported by Meta's messaging API.</p></div></div>}
+    <PageHeader eyebrow="INSTAGRAM DIRECT MESSAGES" title="Instagram inbox." description="Read incoming Instagram DMs and reply from one place. Replies are subject to Meta's messaging rules."/>
+    {!connected && <div className="card inbox-setup-note"><MessageSquare size={22}/><div><strong>Connect an Instagram professional account to get started</strong><p className="muted small">Connect an Instagram Business or Creator account in Connected accounts. Personal Instagram profiles are not supported by Meta's messaging API.</p></div></div>}
     <div className="card inbox-shell">
       <aside className="inbox-list-panel">
         <div className="inbox-list-heading"><strong>Messages</strong><span>{conversations.length}</span></div>
-        <div className="inbox-filters"><button className={filter==='all'?'active':''} onClick={()=>setFilter('all')}>All</button><button className={filter==='instagram'?'active':''} onClick={()=>setFilter('instagram')}>Instagram</button><button className={filter==='facebook'?'active':''} onClick={()=>setFilter('facebook')}>Messenger</button></div>
+        <div className="inbox-filters"><span className="inbox-channel-tag instagram">Instagram Direct</span></div>
         <div className="inbox-conversation-list">
-          {filtered.map(item=><button key={item.id} className={'inbox-conversation '+(activeId===item.id?'active':'')} onClick={()=>onSelect(item)}>
+          {conversations.map(item=><button key={item.id} className={'inbox-conversation '+(activeId===item.id?'active':'')} onClick={()=>onSelect(item)}>
             <span className={'inbox-avatar '+item.platform}>{item.platform==='instagram'?'◎':'f'}</span>
             <span className="inbox-conversation-copy"><strong>{item.participant_username?'@'+item.participant_username:item.participant_name||'Customer'}</strong><small>{item.last_message_text||'New conversation'}</small></span>
             <span className="inbox-conversation-meta">{item.last_message_at&&<small>{new Date(item.last_message_at).toLocaleDateString()}</small>}{item.unread_count>0&&<i>{item.unread_count}</i>}</span>
           </button>)}
-          {!filtered.length&&<div className="inbox-empty-list">{loading?'Loading conversations…':'No conversations yet'}</div>}
+          {!conversations.length&&<div className="inbox-empty-list">{loading?'Loading conversations…':'No conversations yet'}</div>}
         </div>
       </aside>
       <section className="inbox-chat-panel">
         {active ? <>
-          <header className="inbox-chat-header"><div><strong>{active.participant_username?'@'+active.participant_username:active.participant_name||'Customer'}</strong><span>{active.platform==='instagram'?'Instagram Direct':'Facebook Messenger'} · {active.status}</span></div><span className={'inbox-channel-tag '+active.platform}>{active.platform==='instagram'?'Instagram':'Messenger'}</span></header>
+          <header className="inbox-chat-header"><div><strong>{active.participant_username?'@'+active.participant_username:active.participant_name||'Customer'}</strong><span>Instagram Direct · {active.status}</span></div><span className="inbox-channel-tag instagram">Instagram</span></header>
           <div className="inbox-message-stream">
             {messages.map(message=><div className={'inbox-bubble-row '+message.direction} key={message.id}><div className="inbox-bubble"><p>{message.message_text||'Media attachment'}</p>{message.attachments?.length>0&&<small>{message.attachments.length} attachment(s) · media previews are not available yet</small>}<time>{new Date(message.sent_at).toLocaleString()}</time></div></div>)}
             {!messages.length&&<div className="inbox-empty-chat">Your conversation will appear here.</div>}
@@ -686,7 +668,7 @@ function InboxView({conversations,messages,activeId,onSelect,draft,setDraft,onSe
         </> : <div className="inbox-empty-chat"><MessageSquare size={30}/><h3>Your conversations live here.</h3><p>Choose a conversation or connect a social account to get started.</p></div>}
       </section>
     </div>
-    <details className="card inbox-webhook-guide"><summary>Developer setup · connect Meta webhooks</summary><p className="muted small">Add this HTTPS callback URL to the Webhooks product in your Meta app. Set the verification token as the Supabase Edge Function secret META_WEBHOOK_VERIFY_TOKEN. Your existing META_APP_SECRET is used to validate webhook signatures.</p><code className="webhook-url">{webhookUrl}</code><p className="muted small">Subscribe to Instagram messaging events and the Facebook Page messages field. Meta App Review must approve messaging permissions before ordinary customers' conversations are available. Keep the standard reply window in mind.</p></details>
+    <details className="card inbox-webhook-guide"><summary>Developer setup · connect Meta webhooks</summary><p className="muted small">Add this HTTPS callback URL to the Webhooks product in your Meta app. Set the verification token as the Supabase Edge Function secret META_WEBHOOK_VERIFY_TOKEN. Your existing META_APP_SECRET is used to validate webhook signatures.</p><code className="webhook-url">{webhookUrl}</code><p className="muted small">Subscribe the Instagram object to the <code>messages</code> event. Meta App Review must approve messaging permissions before ordinary customers' conversations are available. Keep the standard reply window in mind.</p></details>
   </section>
 }
 
