@@ -24,7 +24,7 @@ const navItems = [
   { id: 'inbox', label: 'Unified inbox', icon: MessageSquare },
   { id: 'accounts', label: 'Connected accounts', icon: Link2 },
   { id: 'settings', label: 'Settings', icon: Settings },
-  { id: 'system-health', label: 'System Health', icon: Activity },
+  { id: 'system-health', label: 'Admin Control Center', icon: Activity },
 ]
 
 export default function App() {
