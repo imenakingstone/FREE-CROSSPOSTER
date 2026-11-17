@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
-import { LayoutDashboard, CalendarDays, FileText, History, Link2, Settings, LogOut, ImagePlus, Send, ShieldCheck, Video, Trash2, Clock3, Plus, Save, X, RefreshCw, Bell, CheckCheck, Activity } from 'lucide-react'
+import { LayoutDashboard, CalendarDays, FileText, History, Link2, Settings, LogOut, ImagePlus, Send, ShieldCheck, Video, Trash2, Clock3, Plus, Save, X, RefreshCw, Bell, CheckCheck, Activity, MessageSquare, Search } from 'lucide-react'
 
 function CrossposterLogo() { return <span className="brand-icon crossposter-logo" aria-label="FREE CROSSPOSTER"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M8 13h17l-4-4m4 4-4 4M32 27H15l4-4m-4 4 4 4" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/><path d="M10 20h20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity=".55"/></svg></span> }
 function PlatformLogo({ platform }) {
@@ -21,6 +21,7 @@ const navItems = [
   { id: 'calendar', label: 'Calendar', icon: CalendarDays },
   { id: 'drafts', label: 'Drafts', icon: FileText },
   { id: 'history', label: 'Publishing history', icon: History },
+  { id: 'inbox', label: 'Unified inbox', icon: MessageSquare },
   { id: 'accounts', label: 'Connected accounts', icon: Link2 },
   { id: 'settings', label: 'Settings', icon: Settings },
   { id: 'system-health', label: 'System Health', icon: Activity },
@@ -56,6 +57,14 @@ export default function App() {
   const [publishingPostId, setPublishingPostId] = useState(null)
   const [healthReport, setHealthReport] = useState(null)
   const [healthLoading, setHealthLoading] = useState(false)
+  const [adminMetrics, setAdminMetrics] = useState(null)
+  const [adminMetricsLoading, setAdminMetricsLoading] = useState(false)
+  const [inboxConversations, setInboxConversations] = useState([])
+  const [inboxMessages, setInboxMessages] = useState([])
+  const [activeConversationId, setActiveConversationId] = useState(null)
+  const [inboxDraft, setInboxDraft] = useState('')
+  const [inboxLoading, setInboxLoading] = useState(false)
+  const [inboxSending, setInboxSending] = useState(false)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -76,6 +85,47 @@ export default function App() {
   useEffect(() => {
     if (session?.user) refreshWorkspace()
   }, [session?.user?.id])
+  useEffect(() => {
+    if (!session?.user?.id) return
+    let stopped = false
+    const ping = async () => {
+      if (stopped || document.visibilityState !== 'visible') return
+      await supabase.functions.invoke('presence-heartbeat', { body: { online: true } })
+    }
+    ping()
+    const timer = window.setInterval(ping, 45000)
+    const onVisibility = () => { if (document.visibilityState === 'visible') ping() }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      stopped = true
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibility)
+      supabase.functions.invoke('presence-heartbeat', { body: { online: false } })
+    }
+  }, [session?.user?.id])
+  useEffect(() => {
+    const isAdmin = session?.user?.email?.toLowerCase() === 'imenaking12@gmail.com'
+    if (!isAdmin || activeView !== 'system-health') return
+    loadAdminMetrics()
+    const timer = window.setInterval(loadAdminMetrics, 15000)
+    return () => window.clearInterval(timer)
+  }, [session?.user?.id, activeView])
+  useEffect(() => {
+    if (!session?.user?.id || activeView !== 'inbox') return
+    setInboxLoading(true)
+    loadInboxConversations().finally(() => setInboxLoading(false))
+    const channel = supabase.channel('inbox-live-' + session.user.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inbox_messages', filter: 'user_id=eq.' + session.user.id }, () => {
+        if (activeConversationId) loadInboxMessages(activeConversationId)
+        loadInboxConversations()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inbox_conversations', filter: 'user_id=eq.' + session.user.id }, () => loadInboxConversations())
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [session?.user?.id, activeView, activeConversationId])
+  useEffect(() => {
+    if (activeView === 'inbox' && activeConversationId) loadInboxMessages(activeConversationId)
+  }, [activeConversationId, activeView])
 
   async function refreshWorkspace() {
     await Promise.all([loadPosts(), loadAccounts(), loadDestinations(), loadNotifications(), loadLogs(), loadSchedules(), loadProfile(), loadSettings()])
@@ -93,6 +143,61 @@ export default function App() {
       setHealthReport(data)
     } catch (error) { setNotice(error.message || 'Could not run the system scan.') }
     finally { setHealthLoading(false) }
+  }
+  async function loadAdminMetrics() {
+    setAdminMetricsLoading(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-dashboard', { body: {} })
+      if (error) {
+        let details = null
+        try { details = await error.context?.json() } catch {}
+        throw new Error(details?.error || data?.error || error.message || 'Admin metrics unavailable.')
+      }
+      if (data?.error) throw new Error(data.error)
+      setAdminMetrics(data)
+    } catch (error) { setNotice(error.message || 'Could not load admin metrics.') }
+    finally { setAdminMetricsLoading(false) }
+  }
+  async function loadInboxConversations() {
+    if (!session?.user?.id) return
+    const { data, error } = await supabase.from('inbox_conversations')
+      .select('id,platform,social_account_id,participant_id,participant_name,participant_username,last_message_text,last_message_at,last_inbound_at,unread_count,status')
+      .eq('user_id', session.user.id).order('last_message_at', { ascending: false }).limit(100)
+    if (error) { setNotice(error.message); return }
+    setInboxConversations(data || [])
+    if (!activeConversationId && data?.length) setActiveConversationId(data[0].id)
+    if (activeConversationId && !data?.some(item => item.id === activeConversationId)) setActiveConversationId(data?.[0]?.id || null)
+  }
+  async function loadInboxMessages(conversationId) {
+    if (!conversationId) { setInboxMessages([]); return }
+    const { data, error } = await supabase.from('inbox_messages')
+      .select('id,conversation_id,platform_message_id,direction,sender_id,message_text,attachments,delivery_status,sent_at')
+      .eq('conversation_id', conversationId).order('sent_at', { ascending: true }).limit(200)
+    if (error) setNotice(error.message); else setInboxMessages(data || [])
+  }
+  async function selectInboxConversation(conversation) {
+    setActiveConversationId(conversation.id)
+    await supabase.from('inbox_conversations').update({ unread_count: 0 }).eq('id', conversation.id).eq('user_id', session.user.id)
+    setInboxConversations(current => current.map(item => item.id === conversation.id ? { ...item, unread_count: 0 } : item))
+    await loadInboxMessages(conversation.id)
+  }
+  async function sendInboxMessage(event) {
+    event.preventDefault()
+    if (!activeConversationId || !inboxDraft.trim()) return
+    setInboxSending(true); setNotice('')
+    try {
+      const { data, error } = await supabase.functions.invoke('meta-send-message', { body: { conversation_id: activeConversationId, text: inboxDraft.trim() } })
+      if (error) {
+        let details = null
+        try { details = await error.context?.json() } catch {}
+        throw new Error(details?.error || data?.error || error.message || 'Message could not be sent.')
+      }
+      if (data?.error) throw new Error(data.error)
+      setInboxDraft('')
+      setNotice(data?.sync_warning ? 'Message sent, but the local inbox refresh needs attention.' : 'Message sent.')
+      await Promise.all([loadInboxMessages(activeConversationId), loadInboxConversations()])
+    } catch (error) { setNotice(error.message || 'Message could not be sent.') }
+    finally { setInboxSending(false) }
   }
   async function loadPosts() {
     const { data, error } = await supabase.from('posts').select('id,caption,media_path,media_type,original_filename,status,created_at,updated_at').order('created_at', { ascending: false }).limit(100)
@@ -165,6 +270,15 @@ export default function App() {
   }
   async function handleSignOut() { await supabase.auth.signOut(); setPosts([]); setSocialAccounts([]); setPostDestinations([]); setNotifications([]); setLogs([]); setSchedules([]) }
 
+  async function connectFacebook() {
+    setBusy(true); setNotice('')
+    try {
+      const { data, error } = await supabase.functions.invoke('facebook-oauth-start', { body: {} })
+      if (error) throw error
+      if (!data?.url) throw new Error(data?.error || 'Facebook authorization could not start.')
+      window.location.assign(data.url)
+    } catch (error) { setNotice(error.message || 'Could not start Facebook authorization.'); setBusy(false) }
+  }
   async function connectInstagram() {
     setBusy(true); setNotice('')
     try {
@@ -355,9 +469,10 @@ export default function App() {
         {activeView === 'drafts' && <Drafts posts={draftPosts} destinations={postDestinations} accounts={socialAccounts} onDelete={deleteDraft} onSave={saveCaption} onPublish={publishDestination} onAssignAccount={assignDestinationAccount} publishingPostId={publishingPostId} />}
         {activeView === 'calendar' && <CalendarView posts={posts} schedules={schedules} onSchedule={schedulePost} onCancel={cancelSchedule} busy={busy} schedulePostId={schedulePostId} setSchedulePostId={setSchedulePostId} destinationId={scheduleDestinationId} setDestinationId={setScheduleDestinationId} scheduleAt={scheduleAt} setScheduleAt={setScheduleAt} destinations={destRows} />}
         {activeView === 'history' && <HistoryView logs={logs} posts={posts} />}
-        {activeView === 'accounts' && <Accounts accounts={socialAccounts} onConnect={connectInstagram} onConnectTikTok={() => connectPlatform('tiktok')} onDisconnect={disconnectAccount} busy={busy} />}
+        {activeView === 'inbox' && <InboxView conversations={inboxConversations} messages={inboxMessages} activeId={activeConversationId} onSelect={selectInboxConversation} draft={inboxDraft} setDraft={setInboxDraft} onSend={sendInboxMessage} loading={inboxLoading} sending={inboxSending} accounts={socialAccounts} />}
+        {activeView === 'accounts' && <Accounts accounts={socialAccounts} onConnect={connectInstagram} onConnectTikTok={() => connectPlatform('tiktok')} onConnectFacebook={connectFacebook} onDisconnect={disconnectAccount} busy={busy} />}
         {activeView === 'settings' && <SettingsView profile={profile} setProfile={setProfile} settings={settings} setSettings={setSettings} onProfileSave={saveProfile} onSettingsSave={saveSettings} onPasswordReset={sendPasswordReset} busy={busy} email={session.user.email} />}
-        {activeView === 'system-health' && session.user.email?.toLowerCase() === 'imenaking12@gmail.com' && <SystemHealthView report={healthReport} loading={healthLoading} onScan={runSystemHealth} />}
+        {activeView === 'system-health' && session.user.email?.toLowerCase() === 'imenaking12@gmail.com' && <SystemHealthView report={healthReport} loading={healthLoading} onScan={runSystemHealth} metrics={adminMetrics} metricsLoading={adminMetricsLoading} />}
         {notice && <p className="notice workspace-notice">{notice}</p>}
       </div>
     </section>
@@ -365,10 +480,17 @@ export default function App() {
 }
 
 
-function SystemHealthView({ report, loading, onScan }) {
+function SystemHealthView({ report, loading, onScan, metrics, metricsLoading }) {
   const statusLabel = status => status === 'critical' ? 'Critical' : status === 'warning' ? 'Warning' : status === 'info' ? 'Review' : 'Healthy'
   return <section className="system-health-page">
-    <PageHeader eyebrow="ADMINISTRATOR ONLY" title="System Health." description="Read-only checks for Supabase security, configuration and database risks." action={<button className="primary-btn" onClick={onScan} disabled={loading}><Activity size={16}/>{loading ? 'Scanning…' : 'Run full scan'}</button>}/>
+    <PageHeader eyebrow="ADMINISTRATOR ONLY" title="Admin Control Center." description="Live audience, connected channels, publishing health and backend diagnostics." action={<button className="primary-btn" onClick={onScan} disabled={loading}><Activity size={16}/>{loading ? 'Scanning…' : 'Run full scan'}</button>}/>
+    <div className="admin-metrics-grid">
+      <article className="card admin-metric"><span>Registered users</span><strong>{metrics?.registered_users ?? '—'}</strong><small>All accounts created</small></article>
+      <article className="card admin-metric online"><span>Currently online</span><strong>{metrics?.online_users ?? '—'}</strong><small>Active in the last 2 minutes · refreshes every 15s</small><i/></article>
+      <article className="card admin-metric"><span>Connected social accounts</span><strong>{metrics?.connected_accounts ?? '—'}</strong><small>Production connections</small></article>
+      <article className="card admin-metric"><span>Publishing failures · 24h</span><strong>{metrics?.publishing_failures_24h ?? '—'}</strong><small>{metrics?.failed_destinations ?? '—'} failed destinations overall</small></article>
+    </div>
+    <div className="admin-metrics-foot"><span className="live-dot"/> {metricsLoading ? 'Updating live metrics…' : metrics?.checked_at ? 'Last updated ' + new Date(metrics.checked_at).toLocaleTimeString() : 'Waiting for first metrics snapshot'} <span>·</span> {metrics?.total_posts ?? 0} total posts <span>·</span> {metrics?.inbox_messages ?? 0} inbox messages</div>
     {!report && <div className="card health-empty"><ShieldCheck size={30}/><h2>Ready to inspect your backend</h2><p className="muted">Run a scan to check database access controls, integration secret configuration, extensions and index usage.</p></div>}
     {report && <>
       <div className={'health-summary '+report.overall}><div><span>Overall status</span><strong>{statusLabel(report.overall)}</strong><small>Last checked {new Date(report.checkedAt).toLocaleString()}</small></div><div className="health-counts"><span><b>{report.counts.critical}</b> Critical</span><span><b>{report.counts.warnings}</b> Warnings</span><span><b>{report.counts.info}</b> Review</span><span><b>{report.counts.healthy}</b> Healthy</span></div></div>
@@ -493,7 +615,7 @@ function HistoryView({logs,posts}) {
   const postMap=new Map(posts.map(p=>[p.id,p]))
   return <><PageHeader eyebrow="ACTIVITY" title="Publishing history." description="Review publishing events and errors recorded by connected platforms."/><section className="card"><div className="history-list">{logs.map(log=><div className="simple-row" key={log.id}><div><strong>{postMap.get(log.post_id)?.caption||'Post activity'} · {log.platform}</strong><span>{new Date(log.created_at).toLocaleString()} · {log.message||'No additional details'}</span></div><span className={'draft-status '+(log.status==='published'?'success-status':'')}>{log.status}</span></div>)}{!logs.length&&<div className="empty-state">No publishing events have been recorded yet.</div>}</div></section></>
 }
-function Accounts({accounts,onConnect,onConnectTikTok,onDisconnect,busy}) {
+function Accounts({accounts,onConnect,onConnectTikTok,onConnectFacebook,onDisconnect,busy}) {
   return <><PageHeader eyebrow="YOUR SOCIAL CHANNELS" title="Connected accounts." description="Manage Instagram and TikTok now; YouTube connection is being prepared."/><div className="accounts-grid">
     {platforms.map(p=><article className="account-card card" key={p.id}>
       <div className="account-card-top"><span className={'platform-mark '+p.id}><PlatformLogo platform={p.id} /></span><span className="account-status pending">{accounts.filter(a=>a.platform===p.id&&a.account_status==='connected').length} connected</span></div>
@@ -504,6 +626,13 @@ function Accounts({accounts,onConnect,onConnectTikTok,onDisconnect,busy}) {
         Connect {p.label} <PlatformLogo platform={p.id} />
       </button>
     </article>)}
+    <article className="account-card card messenger-account-card">
+      <div className="account-card-top"><span className="platform-mark facebook-mark"><span>f</span></span><span className="account-status pending">{accounts.filter(a=>a.platform==='facebook'&&a.account_status==='connected').length} connected</span></div>
+      <h2>Facebook Messenger</h2>
+      <p className="muted small">Connect a Facebook Page to receive and reply to customer messages in the Unified Inbox. Meta permissions and app review are required for public users.</p>
+      {accounts.filter(a=>a.platform==='facebook'&&a.environment==='production').map(a=><div className="channel-row" key={a.id}><span>{a.display_name||'Facebook Page'}</span><button className="danger-action" onClick={()=>onDisconnect(a)}><Trash2 size={13}/> Disconnect</button></div>)}
+      <button className="primary-btn full" onClick={onConnectFacebook} disabled={busy}>Connect Facebook Page</button>
+    </article>
     <article className="account-card card">
       <div className="account-card-top"><span className="platform-mark youtube"><PlatformLogo platform="youtube" /></span><span className="account-status pending">Setup required</span></div>
       <h2>YouTube</h2>
@@ -520,6 +649,43 @@ function Accounts({accounts,onConnect,onConnectTikTok,onDisconnect,busy}) {
     </article>
   </div></>
 }
+function InboxView({conversations,messages,activeId,onSelect,draft,setDraft,onSend,loading,sending,accounts}) {
+  const [filter,setFilter]=useState('all')
+  const active=conversations.find(item=>item.id===activeId)
+  const filtered=conversations.filter(item=>filter==='all'||item.platform===filter)
+  const connected=accounts.filter(item=>['instagram','facebook'].includes(item.platform)&&item.account_status==='connected').length
+  const webhookUrl='https://apggccljgfodaxdpxptc.supabase.co/functions/v1/meta-messaging-webhook'
+  return <section className="inbox-page">
+    <PageHeader eyebrow="CUSTOMER CONVERSATIONS" title="Unified inbox." description="Instagram DMs and Facebook Page messages together. Replies are limited to Meta's allowed messaging window."/>
+    {!connected && <div className="card inbox-setup-note"><MessageSquare size={22}/><div><strong>Connect a professional account to get started</strong><p className="muted small">Connect an Instagram professional account or a Facebook Page in Connected accounts. Personal Instagram profiles are not supported by Meta's messaging API.</p></div></div>}
+    <div className="card inbox-shell">
+      <aside className="inbox-list-panel">
+        <div className="inbox-list-heading"><strong>Messages</strong><span>{conversations.length}</span></div>
+        <div className="inbox-filters"><button className={filter==='all'?'active':''} onClick={()=>setFilter('all')}>All</button><button className={filter==='instagram'?'active':''} onClick={()=>setFilter('instagram')}>Instagram</button><button className={filter==='facebook'?'active':''} onClick={()=>setFilter('facebook')}>Messenger</button></div>
+        <div className="inbox-conversation-list">
+          {filtered.map(item=><button key={item.id} className={'inbox-conversation '+(activeId===item.id?'active':'')} onClick={()=>onSelect(item)}>
+            <span className={'inbox-avatar '+item.platform}>{item.platform==='instagram'?'◎':'f'}</span>
+            <span className="inbox-conversation-copy"><strong>{item.participant_username?'@'+item.participant_username:item.participant_name||'Customer'}</strong><small>{item.last_message_text||'New conversation'}</small></span>
+            <span className="inbox-conversation-meta">{item.last_message_at&&<small>{new Date(item.last_message_at).toLocaleDateString()}</small>}{item.unread_count>0&&<i>{item.unread_count}</i>}</span>
+          </button>)}
+          {!filtered.length&&<div className="inbox-empty-list">{loading?'Loading conversations…':'No conversations yet'}</div>}
+        </div>
+      </aside>
+      <section className="inbox-chat-panel">
+        {active ? <>
+          <header className="inbox-chat-header"><div><strong>{active.participant_username?'@'+active.participant_username:active.participant_name||'Customer'}</strong><span>{active.platform==='instagram'?'Instagram Direct':'Facebook Messenger'} · {active.status}</span></div><span className={'inbox-channel-tag '+active.platform}>{active.platform==='instagram'?'Instagram':'Messenger'}</span></header>
+          <div className="inbox-message-stream">
+            {messages.map(message=><div className={'inbox-bubble-row '+message.direction} key={message.id}><div className="inbox-bubble"><p>{message.message_text||'Media attachment'}</p>{message.attachments?.length>0&&<small>{message.attachments.length} attachment(s) · media previews are not available yet</small>}<time>{new Date(message.sent_at).toLocaleString()}</time></div></div>)}
+            {!messages.length&&<div className="inbox-empty-chat">Your conversation will appear here.</div>}
+          </div>
+          <form className="inbox-reply-form" onSubmit={onSend}><textarea rows="2" maxLength="2000" value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Write a reply…" /><button className="primary-btn" disabled={sending||!draft.trim()}>{sending?'Sending…':'Send reply'} <Send size={15}/></button><small>Text replies only · available during Meta's 24-hour standard messaging window.</small></form>
+        </> : <div className="inbox-empty-chat"><MessageSquare size={30}/><h3>Your conversations live here.</h3><p>Choose a conversation or connect a social account to get started.</p></div>}
+      </section>
+    </div>
+    <details className="card inbox-webhook-guide"><summary>Developer setup · connect Meta webhooks</summary><p className="muted small">Add this HTTPS callback URL to the Webhooks product in your Meta app. Set the verification token as the Supabase Edge Function secret META_WEBHOOK_VERIFY_TOKEN. Your existing META_APP_SECRET is used to validate webhook signatures.</p><code className="webhook-url">{webhookUrl}</code><p className="muted small">Subscribe to Instagram messaging events and the Facebook Page messages field. Meta App Review must approve messaging permissions before ordinary customers' conversations are available. Keep the standard reply window in mind.</p></details>
+  </section>
+}
+
 function SettingsView({profile,setProfile,settings,setSettings,onProfileSave,onSettingsSave,onPasswordReset,busy,email}) {
   return <><PageHeader eyebrow="WORKSPACE PREFERENCES" title="Settings." description="Manage your profile, timezone and notification preferences."/><div className="dashboard-grid settings-grid"><form className="card" onSubmit={onProfileSave}><h2>Profile</h2><p className="muted small">Your account details.</p><label>Email address<input value={email} disabled/></label><label>Display name<input value={profile.display_name} onChange={e=>setProfile(p=>({...p,display_name:e.target.value}))} placeholder="Your name"/></label><label>Avatar URL<input value={profile.avatar_url} onChange={e=>setProfile(p=>({...p,avatar_url:e.target.value}))} placeholder="https://…"/></label><button className="primary-btn full" disabled={busy}>Save profile <Save size={15}/></button></form><form className="card" onSubmit={onSettingsSave}><h2>Preferences</h2><p className="muted small">Choose how your workspace behaves. In-app alerts appear in the bell menu; email delivery still needs an email provider.</p><label>Timezone<select value={settings.timezone} onChange={e=>setSettings(s=>({...s,timezone:e.target.value}))}><option>Africa/Kigali</option><option>Africa/Nairobi</option><option>UTC</option><option>Europe/London</option></select></label>{[['email_notifications','Email notifications (delivery not enabled)'],['publish_success_notifications','Successful publishing alerts'],['publish_failure_notifications','Failed publishing alerts'],['weekly_summary','Weekly summary']].map(([key,label])=><label className="toggle-row" key={key}><span>{label}</span><input type="checkbox" checked={!!settings[key]} onChange={e=>setSettings(s=>({...s,[key]:e.target.checked}))}/></label>)}<button className="primary-btn full" disabled={busy}>Save preferences <Save size={15}/></button></form></div><section className="card security-card"><h2>Security</h2><p className="muted small">Social access tokens are stored encrypted by the server. You can revoke a social connection from Connected accounts. Use a unique password for your FREE CROSSPOSTER account.</p><button type="button" className="secondary-action" onClick={onPasswordReset}>Send password reset email</button><div className="settings-api-note"><strong>Platform API credentials</strong><span>Meta and TikTok app secrets stay in Supabase Edge Function secrets. They are never stored in browser settings or exposed in this page.</span></div></section></>
 }
