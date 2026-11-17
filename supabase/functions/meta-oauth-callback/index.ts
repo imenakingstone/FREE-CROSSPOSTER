@@ -119,12 +119,13 @@ Deno.serve(async (req: Request) => {
         refresh_token_encrypted: null,
         token_expires_at: expiresAt,
         scopes: ["instagram_basic", "instagram_content_publish", "instagram_manage_comments", "instagram_manage_messages"],
+        environment: "production",
         account_status: "connected",
         connected_at: now,
         updated_at: now,
       };
       const { error: saveError } = await admin.from("social_accounts")
-        .upsert(payload, { onConflict: "user_id,platform,platform_user_id" });
+        .upsert(payload, { onConflict: "user_id,platform,platform_user_id,environment" });
       if (saveError) throw saveError;
       saved.push(username ? `@${username}` : accountId);
     }
