@@ -127,6 +127,18 @@ Deno.serve(async (req: Request) => {
       const { error: saveError } = await admin.from("social_accounts")
         .upsert(payload, { onConflict: "user_id,platform,platform_user_id,environment" });
       if (saveError) throw saveError;
+      try {
+        const subscribeUrl = new URL(`https://graph.facebook.com/${API_VERSION}/${accountId}/subscribed_apps`);
+        subscribeUrl.searchParams.set("subscribed_fields", "messages");
+        subscribeUrl.searchParams.set("access_token", accessToken);
+        const subscribeResponse = await fetch(subscribeUrl, { method: "POST", signal: AbortSignal.timeout(15000) });
+        if (!subscribeResponse.ok) {
+          const details = await subscribeResponse.json().catch(() => ({}));
+          console.warn("Instagram messaging webhook subscription not completed", { status: subscribeResponse.status, code: details?.error?.code });
+        }
+      } catch (subscriptionError) {
+        console.warn("Instagram webhook subscription failed", subscriptionError instanceof Error ? subscriptionError.message : "unknown error");
+      }
       saved.push(username ? `@${username}` : accountId);
     }
 
