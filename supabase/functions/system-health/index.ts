@@ -41,7 +41,7 @@ Deno.serve(async (req: Request) => {
   const requiredSecrets = [
     "TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET",
     "TIKTOK_SANDBOX_CLIENT_KEY", "TIKTOK_SANDBOX_CLIENT_SECRET",
-    "META_APP_SECRET", "TOKEN_ENCRYPTION_KEY",
+    "META_APP_SECRET", "META_WEBHOOK_VERIFY_TOKEN", "TOKEN_ENCRYPTION_KEY",
   ];
   const presentSecrets = requiredSecrets.filter((name) => Boolean(Deno.env.get(name)));
   const missingSecrets = requiredSecrets.filter((name) => !Deno.env.get(name));
