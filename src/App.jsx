@@ -7,6 +7,7 @@ function PlatformLogo({ platform }) {
   if (platform === 'instagram') return <svg className="platform-logo" viewBox="0 0 24 24" aria-label="Instagram"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" strokeWidth="2"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" strokeWidth="2"/><circle cx="17.5" cy="6.8" r="1.2" fill="currentColor"/></svg>
   if (platform === 'tiktok') return <svg className="platform-logo tiktok-logo" viewBox="0 0 24 24" aria-label="TikTok"><path d="M15.5 3v11.1a4.1 4.1 0 1 1-3.5-4.05v3.1a1.2 1.2 0 1 0 .5 1V3h3c.2 2.2 1.5 3.8 4 4.2v3.1c-1.6-.1-3-.7-4-1.7" fill="currentColor"/><path d="M14.1 4.1v10.2a4.1 4.1 0 0 1-3.1 4" fill="none" stroke="#25F4EE" strokeWidth="1.3"/><path d="M15.5 3v4.1c1 .9 2.2 1.4 3.5 1.5" fill="none" stroke="#FE2C55" strokeWidth="1.3"/></svg>
   if (platform === 'youtube') return <svg className="platform-logo" viewBox="0 0 24 24" aria-label="YouTube"><path d="M23 7.1a3 3 0 0 0-2.1-2.1C19 4.5 12 4.5 12 4.5s-7 0-8.9.5A3 3 0 0 0 1 7.1 31 31 0 0 0 .5 12a31 31 0 0 0 .5 4.9 3 3 0 0 0 2.1 2.1c1.9.5 8.9.5 8.9.5s7 0 8.9-.5a3 3 0 0 0 2.1-2.1 31 31 0 0 0 .5-4.9 31 31 0 0 0-.5-4.9Z" fill="currentColor"/><path d="m9.5 15.5 6-3.5-6-3.5z" fill="#101522"/></svg>
+  if (platform === 'x') return <svg className="platform-logo" viewBox="0 0 24 24" aria-label="X"><path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3L12 14.7 5.6 22H2.4l7.3-8.4L1.9 2h6.5l4.5 6.7L18.9 2Zm-1.1 18h1.7L7.4 3.9H5.6L17.8 20Z" fill="currentColor"/></svg>
   return null
 }
 
@@ -509,6 +510,13 @@ function Accounts({accounts,onConnect,onConnectTikTok,onDisconnect,busy}) {
       <p className="muted small">YouTube channel connection and video publishing are the next integration to build.</p>
       <button className="primary-btn full" disabled title="YouTube OAuth setup is not deployed yet">YouTube setup in progress</button>
       <p className="fine-print">Requires a Google Cloud project, YouTube Data API v3, OAuth consent screen and client credentials.</p>
+    </article>
+    <article className="account-card card x-account-card">
+      <div className="account-card-top"><span className="platform-mark x"><PlatformLogo platform="x" /></span><span className="account-status soon">Planned</span></div>
+      <h2>X (Twitter)</h2>
+      <p className="muted small">We are preparing an X connection. Its current API uses pay-per-use credits, so publishing will remain disabled until costs and account limits are clear.</p>
+      <button className="secondary-btn full" disabled>Coming soon · API access required</button>
+      <p className="fine-print">We won't connect a paid API to your account without making the cost clear first.</p>
     </article>
   </div></>
 }
