@@ -149,6 +149,19 @@ export default function App() {
       }
     } catch (error) { setNotice(error.message || 'Authentication failed.') } finally { setAuthBusy(false) }
   }
+  async function handleGoogleSignIn() {
+    setAuthBusy(true); setNotice('')
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin }
+      })
+      if (error) throw error
+    } catch (error) {
+      setNotice(error.message || 'Google sign-in could not start.')
+      setAuthBusy(false)
+    }
+  }
   async function handleSignOut() { await supabase.auth.signOut(); setPosts([]); setSocialAccounts([]); setPostDestinations([]); setNotifications([]); setLogs([]); setSchedules([]) }
 
   async function connectInstagram() {
@@ -323,7 +336,7 @@ export default function App() {
 
   if (!isSupabaseConfigured) return <SetupMessage />
   if (loading) return <main className="center-screen"><div className="loader" />Loading FREE CROSSPOSTER…</main>
-  if (!session) return showAuth ? <AuthScreen mode={mode} setMode={setMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} displayName={displayName} setDisplayName={setDisplayName} busy={authBusy} notice={notice} onSubmit={handleAuth} /> : <LandingPage onGetStarted={() => { setMode('signup'); setShowAuth(true) }} onSignIn={() => { setMode('login'); setShowAuth(true) }} />
+  if (!session) return showAuth ? <AuthScreen mode={mode} setMode={setMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} displayName={displayName} setDisplayName={setDisplayName} busy={authBusy} notice={notice} onSubmit={handleAuth} onGoogleSignIn={handleGoogleSignIn} /> : <LandingPage onGetStarted={() => { setMode('signup'); setShowAuth(true) }} onSignIn={() => { setMode('login'); setShowAuth(true) }} />
 
   const activeTitle = navItems.find(item => item.id === activeView)?.label || 'Overview'
   return <main className="dashboard socialync-shell">
@@ -370,8 +383,8 @@ function SystemHealthView({ report, loading, onScan }) {
   </section>
 }
 
-function AuthScreen({ mode,setMode,email,setEmail,password,setPassword,displayName,setDisplayName,busy,notice,onSubmit }) {
-  return <main className="auth-layout"><section className="brand-panel"><div className="brand"><span className="brand-icon">FC</span> FREE CROSSPOSTER</div><div className="hero-copy"><p className="eyebrow">ONE WORKFLOW. MULTIPLE CHANNELS.</p><h1>Your content.<br/><span>Everywhere.</span></h1><p className="muted">Prepare a post once, organize your destinations, and manage your publishing workflow from one workspace.</p></div><div className="brand-foot"><ShieldCheck size={16}/> Your media is stored privately.</div></section><section className="auth-panel"><form className="auth-card" onSubmit={onSubmit}><div className="mobile-brand"><span className="brand-icon">FC</span> FREE CROSSPOSTER</div><p className="eyebrow">{mode === 'login' ? 'WELCOME BACK' : 'GET STARTED'}</p><h2>{mode === 'login' ? 'Sign in to your workspace' : 'Create your account'}</h2><p className="muted small">Use your email address to access your publishing dashboard.</p>{mode === 'signup' && <label>Your name<input value={displayName} onChange={e=>setDisplayName(e.target.value)} placeholder="Your name" autoComplete="name"/></label>}<label>Email address<input type="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email"/></label><label>Password<input type="password" required minLength={6} value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 6 characters"/></label><button className="primary-btn full" disabled={busy}>{busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}</button><p className="switch-mode">{mode === 'login' ? "Don't have an account?" : 'Already registered?'} <button type="button" onClick={()=>setMode(mode==='login'?'signup':'login')}>{mode==='login'?'Create one':'Sign in'}</button></p>{notice && <p className="notice">{notice}</p>}</form></section></main>
+function AuthScreen({ mode,setMode,email,setEmail,password,setPassword,displayName,setDisplayName,busy,notice,onSubmit,onGoogleSignIn }) {
+  return <main className="auth-layout"><section className="brand-panel"><div className="brand"><CrossposterLogo/> <span>FREE CROSSPOSTER</span></div><div className="hero-copy"><p className="eyebrow">ONE WORKFLOW. MULTIPLE CHANNELS.</p><h1>Your content.<br/><span>Everywhere.</span></h1><p className="muted">Create once, publish across your channels, and keep every conversation and campaign moving.</p><div className="auth-social-orbit"><span className="orbit-social instagram">◎</span><span className="orbit-social tiktok">♪</span><span className="orbit-social youtube">▶</span><span className="orbit-social xbrand">𝕏</span></div></div><div className="brand-foot"><ShieldCheck size={16}/> Your media is stored privately.</div></section><section className="auth-panel"><form className="auth-card" onSubmit={onSubmit}><div className="mobile-brand"><CrossposterLogo/> FREE CROSSPOSTER</div><p className="eyebrow">{mode === 'login' ? 'WELCOME BACK' : 'YOUR CREATOR WORKSPACE STARTS HERE'}</p><h2>{mode === 'login' ? 'Good to have you back.' : 'Create your account.'}</h2><p className="muted small">Sign in to manage your social channels in one place.</p><button type="button" className="google-auth-btn" onClick={onGoogleSignIn} disabled={busy}><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5Z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.72 7.18l7.64 5.93c4.46-4.12 7.12-10.2 7.12-17.58Z"/><path fill="#FBBC05" d="M10.53 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.87.93 7.53 2.56 10.78l7.97-6.19Z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.87l-7.64-5.93c-2.12 1.42-4.84 2.27-8.26 2.27-6.26 0-11.57-4.22-13.46-9.91l-7.98 6.19C6.51 43.62 14.62 48 24 48Z"/></svg>{busy?'Connecting…':'Continue with Google'}</button><div className="auth-divider"><span>OR CONTINUE WITH EMAIL</span></div>{mode === 'signup' && <label>Your name<input value={displayName} onChange={e=>setDisplayName(e.target.value)} placeholder="Your name" autoComplete="name"/></label>}<label>Email address<input type="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email"/></label><label>Password<input type="password" required minLength={6} value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 6 characters"/></label><button className="primary-btn full" disabled={busy}>{busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'} <span>↗</span></button><p className="switch-mode">{mode === 'login' ? "New around here?" : 'Already have an account?'} <button type="button" onClick={()=>setMode(mode==='login'?'signup':'login')}>{mode==='login'?'Create your account':'Sign in'}</button></p>{notice && <p className="notice">{notice}</p>}</form></section></main>
 }
 function PageHeader({eyebrow,title,description,action}) { return <div className="welcome-row"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p className="muted">{description}</p></div>{action}</div> }
 function Overview({posts,accounts,schedules,logs,onNavigate}) {
@@ -508,7 +521,7 @@ function SetupMessage(){return <main className="center-screen"><div className="s
 function LandingPage({ onGetStarted, onSignIn }) {
   return <main className="landing-page">
     <header className="landing-nav">
-      <a className="landing-brand" href="#home"><span className="brand-icon">FC</span> FREE CROSSPOSTER</a>
+      <a className="landing-brand" href="#home"><CrossposterLogo/> FREE CROSSPOSTER</a>
       <nav><a href="#features">Features</a><a href="#how-it-works">How it works</a><a href="/terms.html">Terms</a><a href="/privacy.html">Privacy</a></nav>
       <div className="landing-actions"><button className="landing-signin" onClick={onSignIn}>Sign in</button><button className="landing-nav-cta" onClick={onGetStarted}>Get started <span>↗</span></button></div>
     </header>
@@ -548,6 +561,6 @@ function LandingPage({ onGetStarted, onSignIn }) {
       <div className="landing-steps"><article><span>01</span><div><h3>Create your account</h3><p>Sign up securely and open your personal publishing workspace.</p></div><b>↗</b></article><article><span>02</span><div><h3>Connect your channels</h3><p>Authorize the social accounts you want to manage. You stay in control of access.</p></div><b>↗</b></article><article><span>03</span><div><h3>Create and publish</h3><p>Upload your media, write a caption, choose destinations and publish where supported.</p></div><b>↗</b></article></div>
     </section>
     <section className="landing-cta"><span className="landing-eyebrow">YOUR NEXT POST STARTS HERE</span><h2>Make consistency<br/><em>feel effortless.</em></h2><button className="landing-primary" onClick={onGetStarted}>Get started for free <span>→</span></button></section>
-    <footer className="landing-footer"><a className="landing-brand" href="#home"><span className="brand-icon">FC</span> FREE CROSSPOSTER</a><span>© 2026 FREE CROSSPOSTER</span><div><a href="/terms.html">Terms of Service</a><a href="/privacy.html">Privacy Policy</a><a href="mailto:imenaking@gmail.com">Contact</a></div></footer>
+    <footer className="landing-footer"><a className="landing-brand" href="#home"><CrossposterLogo/> FREE CROSSPOSTER</a><span>© 2026 FREE CROSSPOSTER</span><div><a href="/terms.html">Terms of Service</a><a href="/privacy.html">Privacy Policy</a><a href="mailto:imenaking@gmail.com">Contact</a></div></footer>
   </main>
 }
