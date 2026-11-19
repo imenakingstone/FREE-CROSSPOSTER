@@ -66,3 +66,45 @@ Last reviewed: 2026-11-19
 - The current meta-inbox-sync implementation is not yet production-correct: it trusts hard-coded permission names and does not use the Page access token required by Meta's Page Conversations API.
 - Do not mark Instagram Inbox complete until a real inbound DM is imported and a real reply is confirmed delivered.
 - Do not mark authentication complete until a brand-new non-team user can register, receive confirmation email, confirm, log in, reset password and sign in with Google on the production domain.
+
+
+## P0 — User-reported issues and whole-site navigation review (added 2026-11-19)
+
+### Authentication screens and navigation
+- [x] Fix sign-out returning to the public landing page instead of trapping the user on the auth form.
+- [x] Add an explicit “Back to home” action on login/register and support browser Back from the auth screen.
+- [x] Keep Help/FAQ, Terms, Privacy and Data Deletion links visible in the authenticated workspace sidebar.
+- [ ] Add a public “Forgot password?” flow reachable from the login screen (not only from Settings after login).
+- [ ] Test browser Back/Forward, refresh, Google OAuth return, email confirmation return, logout and re-login on desktop and mobile.
+- [ ] Verify unauthenticated users always see Sign in and Get started, and signed-out users can immediately choose either action.
+
+### Public pages and discoverability
+- [ ] Verify every navigation link on the landing page, Features, How it Works, FAQ, Terms, Privacy and Data Deletion pages.
+- [ ] Ensure every public page has consistent visible navigation to the other public resources and a clear Sign in / Get started action.
+- [ ] Ensure each authenticated workspace view retains its sidebar navigation and visible Help/FAQ + legal links at mobile breakpoints too.
+- [ ] Confirm no links point to missing pages, stale routes, localhost URLs or placeholder destinations.
+- [ ] Check sitemap coverage and canonical URLs for every intended public page; keep authenticated dashboard routes out of the sitemap.
+
+### Other known defects and limitations to track
+- [ ] Public email signup currently cannot reliably serve non-team users until custom SMTP is configured; prior logs showed `over_email_send_rate_limit` and recipient authorization errors.
+- [ ] Google OAuth previously returned to localhost:3000 and encountered callback/state issues; validate current production redirect configuration and full OAuth round trip.
+- [ ] Instagram connection is still restricted by Meta app mode, permission Advanced Access/App Review, and possibly Tech Provider verification; callback now records only permissions Meta actually granted, but this does not unlock public access.
+- [ ] Instagram Inbox sync/reply is not production-correct until the OAuth flow stores the required linked Page ID and encrypted Page access token, then sync/reply use that Page token.
+- [ ] Meta webhook verification secret `META_WEBHOOK_VERIFY_TOKEN` and `META_APP_SECRET` must be confirmed; test real inbound webhook delivery and signature validation.
+- [ ] Instagram conversations/messages table was empty at the last database inspection; verify actual inbound DM import, message history limits, attachments, unread counts and replies.
+- [ ] Facebook Page publishing is implemented in Edge Functions but requires Meta permission review and real-user end-to-end validation.
+- [ ] TikTok production access is subject to app review/audit; unaudited direct posts may be private, and scheduled publishing is not yet supported by the scheduler.
+- [ ] YouTube OAuth/upload is not verified end-to-end; previous redirect configuration sent a Google auth return to localhost:3000.
+- [ ] Create Post controls such as hide like count, comments, location, Facebook cross-share, trimming and platform settings must be checked against actual API support. Do not present saved preferences as applied platform settings.
+- [ ] Publishing reliability: verify Instagram success is recorded without a database-trigger error, plus partial failure, retries, duplicate prevention and scheduled publishing.
+- [ ] Admin System Health is partial; extend diagnostics for Edge Function failures, auth logs, webhooks, storage, provider availability and scan history.
+- [ ] Resolve/document security warnings: leaked-password protection disabled; `pg_net` installed in public schema; unused-index notices; RLS-without-policy findings on server-only tables must be reviewed and intentionally documented, not blindly exposed.
+- [ ] Check Vercel production deployment protection and ensure the public website is crawlable without exposing authenticated data.
+- [ ] Run a full responsive/accessibility/link audit and production build before public launch.
+
+### Latest database advisor snapshot (2026-11-19)
+- Security: INFO `rls_enabled_no_policy` on `private.scheduler_auth` and `public.meta_oauth_states` (both server-only by design; confirm no accidental client exposure).
+- Security: WARN `extension_in_public` — `pg_net` in `public`; review Supabase remediation before moving it because scheduler/webhook dependencies may exist.
+- Security: WARN `auth_leaked_password_protection` — enable in Supabase Auth password security settings.
+- Performance: INFO unused indexes `meta_oauth_states_user_created_idx`, `inbox_messages_conversation_time_idx`, `inbox_messages_user_id_idx`; review query plans and workload before dropping any index.
+- Database project was ACTIVE_HEALTHY at review time. This is not a substitute for user-flow testing.
