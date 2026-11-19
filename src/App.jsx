@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
 import { LayoutDashboard, CalendarDays, FileText, History, Link2, Settings, LogOut, ImagePlus, Send, ShieldCheck, Video, Trash2, Clock3, Plus, Save, X, RefreshCw, Bell, CheckCheck, Activity, MessageSquare, Search } from 'lucide-react'
 
-function CrossposterLogo() { return <span className="brand-icon crossposter-logo" aria-label="FREE CROSSPOSTER"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M8 13h17l-4-4m4 4-4 4M32 27H15l4-4m-4 4 4 4" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/><path d="M10 20h20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity=".55"/></svg></span> }
+function CrossposterLogo() { return <span className="brand-icon crossposter-logo" aria-label="FREE CROSSPOSTER"><img src="/crossposter.svg" alt="" /></span> }
 function PlatformLogo({ platform }) {
   if (platform === 'instagram') return <svg className="platform-logo" viewBox="0 0 24 24" aria-label="Instagram"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" strokeWidth="2"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" strokeWidth="2"/><circle cx="17.5" cy="6.8" r="1.2" fill="currentColor"/></svg>
   if (platform === 'tiktok') return <svg className="platform-logo tiktok-logo" viewBox="0 0 24 24" aria-label="TikTok"><path d="M15.5 3v11.1a4.1 4.1 0 1 1-3.5-4.05v3.1a1.2 1.2 0 1 0 .5 1V3h3c.2 2.2 1.5 3.8 4 4.2v3.1c-1.6-.1-3-.7-4-1.7" fill="currentColor"/><path d="M14.1 4.1v10.2a4.1 4.1 0 0 1-3.1 4" fill="none" stroke="#25F4EE" strokeWidth="1.3"/><path d="M15.5 3v4.1c1 .9 2.2 1.4 3.5 1.5" fill="none" stroke="#FE2C55" strokeWidth="1.3"/></svg>
@@ -694,19 +694,25 @@ function LandingPage({ onGetStarted, onSignIn }) {
         <div className="landing-hero-buttons"><button className="landing-primary" onClick={onGetStarted}>Start for free <span>→</span></button><a className="landing-secondary" href="#how-it-works">See how it works <span>↓</span></a></div>
         <div className="landing-proof"><span>✓</span> Your content stays yours <b>·</b> Connect accounts when you're ready</div>
       </div>
-      <div className="landing-visual" aria-label="Animated preview of the publishing workspace">
-        <div className="orbit orbit-one"/><div className="orbit orbit-two"/>
-        <div className="preview-window">
-          <div className="preview-top"><span className="preview-dots"><i/><i/><i/></span><b>YOUR WORKSPACE</b><span className="preview-live">● LIVE</span></div>
-          <div className="preview-body"><aside className="preview-side"><span className="preview-logo">FC</span><i/><i/><i/><i/><i/></aside>
-            <div className="preview-main"><small>CONTENT OVERVIEW</small><h3>Your content, organized.</h3><div className="preview-stats"><span><b>Posts</b><strong>12</strong></span><span><b>Channels</b><strong>02</strong></span><span><b>Scheduled</b><strong>04</strong></span></div>
-              <div className="preview-post"><div className="preview-thumb"><span>✦</span></div><div><b>Weekend story</b><small>Ready for your channels</small><div className="preview-tags"><i>Instagram</i><i>TikTok</i></div></div><span className="preview-check">✓</span></div>
-              <div className="preview-timeline"><span/><span/><span/><span/><span/><span/><span/></div>
-            </div>
-          </div>
+      <div className="landing-visual" aria-label="Instagram, TikTok and YouTube orbit into the FREE CROSSPOSTER logo to represent one post shared across three channels">
+        <div className="crosspost-stage">
+          <div className="stage-halo stage-halo-one"/>
+          <div className="stage-halo stage-halo-two"/>
+          <div className="stage-orbit stage-orbit-outer"/>
+          <div className="stage-orbit stage-orbit-inner"/>
+          <svg className="stage-routes" viewBox="0 0 560 520" aria-hidden="true">
+            <defs><linearGradient id="route-gradient" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#00e5f2"/><stop offset=".52" stopColor="#6846ff"/><stop offset="1" stopColor="#f020d5"/></linearGradient></defs>
+            <path className="route-line route-instagram" d="M112 112 C145 150 190 205 280 260"/>
+            <path className="route-line route-tiktok" d="M448 112 C415 150 370 205 280 260"/>
+            <path className="route-line route-youtube" d="M280 455 C280 390 280 335 280 260"/>
+          </svg>
+          <div className="platform-node instagram-node"><span className="platform-node-icon"><PlatformLogo platform="instagram"/></span><b>Instagram</b></div>
+          <div className="platform-node tiktok-node"><span className="platform-node-icon"><PlatformLogo platform="tiktok"/></span><b>TikTok</b></div>
+          <div className="platform-node youtube-node"><span className="platform-node-icon"><PlatformLogo platform="youtube"/></span><b>YouTube</b></div>
+          <div className="crossposter-core"><span className="core-aura"/><img src="/crossposter.svg" alt="FREE CROSSPOSTER logo"/><span className="core-caption">ONE POST · THREE CHANNELS</span></div>
+          <div className="stage-signal signal-one"/><div className="stage-signal signal-two"/><div className="stage-signal signal-three"/>
         </div>
-        <div className="float-chip chip-calendar"><span>▦</span> Content calendar</div>
-        <div className="float-chip chip-social"><span>◎</span><span>♪</span> Connected channels</div>
+        <div className="visual-caption"><span className="visual-caption-dot"/> ONE CREATION. EVERY CONNECTED CHANNEL.</div>
       </div>
     </section>
     <section className="landing-strip"><span>MADE FOR CREATORS & SMALL TEAMS</span><b>Instagram</b><b>TikTok</b><b>One simple workflow</b></section>
