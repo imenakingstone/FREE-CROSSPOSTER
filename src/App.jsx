@@ -122,27 +122,34 @@ export default function App() {
   useEffect(() => {
     if (!session?.user?.id || activeView !== 'inbox') return
     let alive = true
-    const refresh = async (showLoader = false) => {
-      if (showLoader) setInboxLoading(true)
+    const initialSync = async () => {
+      setInboxLoading(true)
       try {
+        const { data, error } = await supabase.functions.invoke('meta-inbox-sync', { body: {} })
+        if (error) {
+          let details = null
+          try { details = await error.context?.json() } catch {}
+          throw new Error(details?.error || data?.error || error.message || 'Instagram inbox sync failed.')
+        }
+        if (data?.errors?.length) setNotice(data.errors[0])
         await loadInboxConversations()
-        if (activeConversationId) await loadInboxMessages(activeConversationId)
         if (alive) setInboxLastSynced(new Date())
-      } finally { if (alive && showLoader) setInboxLoading(false) }
+      } catch (error) {
+        if (alive) setNotice(error.message || 'Instagram inbox sync failed.')
+        await loadInboxConversations()
+      } finally { if (alive) setInboxLoading(false) }
     }
-    refresh(true)
+    initialSync()
     const poll = window.setInterval(() => {
-      if (document.visibilityState === 'visible') refresh(false)
+      if (document.visibilityState === 'visible') loadInboxConversations()
     }, 12000)
     const channel = supabase.channel('inbox-live-' + session.user.id)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inbox_messages', filter: 'user_id=eq.' + session.user.id }, () => {
-        if (activeConversationId) loadInboxMessages(activeConversationId)
-        loadInboxConversations()
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inbox_messages', filter: 'user_id=eq.' + session.user.id }, () => loadInboxConversations())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inbox_conversations', filter: 'user_id=eq.' + session.user.id }, () => loadInboxConversations())
       .subscribe()
     return () => { alive = false; window.clearInterval(poll); supabase.removeChannel(channel) }
-  }, [session?.user?.id, activeView, activeConversationId])
+  }, [session?.user?.id, activeView])
+
   useEffect(() => {
     if (activeView === 'inbox' && activeConversationId) loadInboxMessages(activeConversationId)
   }, [activeConversationId, activeView])
@@ -177,6 +184,16 @@ export default function App() {
       setAdminMetrics(data)
     } catch (error) { setNotice(error.message || 'Could not load admin metrics.') }
     finally { setAdminMetricsLoading(false) }
+  }
+  async function syncInstagramInbox() {
+    const { data, error } = await supabase.functions.invoke('meta-inbox-sync', { body: {} })
+    if (error) {
+      let details = null
+      try { details = await error.context?.json() } catch {}
+      throw new Error(details?.error || data?.error || error.message || 'Instagram inbox sync failed.')
+    }
+    if (data?.errors?.length) throw new Error(data.errors[0])
+    return data
   }
   async function loadInboxConversations() {
     if (!session?.user?.id) return
@@ -480,7 +497,7 @@ export default function App() {
         {activeView === 'drafts' && <Drafts posts={draftPosts} destinations={postDestinations} accounts={socialAccounts} onDelete={deleteDraft} onSave={saveCaption} onPublish={publishDestination} onAssignAccount={assignDestinationAccount} publishingPostId={publishingPostId} />}
         {activeView === 'calendar' && <CalendarView posts={posts} schedules={schedules} onSchedule={schedulePost} onCancel={cancelSchedule} busy={busy} schedulePostId={schedulePostId} setSchedulePostId={setSchedulePostId} destinationId={scheduleDestinationId} setDestinationId={setScheduleDestinationId} scheduleAt={scheduleAt} setScheduleAt={setScheduleAt} destinations={destRows} />}
         {activeView === 'history' && <HistoryView logs={logs} posts={posts} />}
-        {activeView === 'inbox' && <InboxView conversations={inboxConversations} messages={inboxMessages} activeId={activeConversationId} onSelect={selectInboxConversation} draft={inboxDraft} setDraft={setInboxDraft} onSend={sendInboxMessage} loading={inboxLoading} sending={inboxSending} accounts={socialAccounts} onRefresh={async()=>{setInboxLoading(true);try{await loadInboxConversations();if(activeConversationId)await loadInboxMessages(activeConversationId);setInboxLastSynced(new Date())}finally{setInboxLoading(false)}}} lastSynced={inboxLastSynced} />}
+        {activeView === 'inbox' && <InboxView conversations={inboxConversations} messages={inboxMessages} activeId={activeConversationId} onSelect={selectInboxConversation} draft={inboxDraft} setDraft={setInboxDraft} onSend={sendInboxMessage} loading={inboxLoading} sending={inboxSending} accounts={socialAccounts} onRefresh={async()=>{setInboxLoading(true);try{await syncInstagramInbox();await loadInboxConversations();if(activeConversationId)await loadInboxMessages(activeConversationId);setInboxLastSynced(new Date())}catch(error){setNotice(error.message||'Instagram inbox sync failed.')}finally{setInboxLoading(false)}}} lastSynced={inboxLastSynced} />}
         {activeView === 'accounts' && <Accounts accounts={socialAccounts} onConnect={connectInstagram} onConnectTikTok={() => connectPlatform('tiktok')} onDisconnect={disconnectAccount} busy={busy} />}
         {activeView === 'settings' && <SettingsView profile={profile} setProfile={setProfile} settings={settings} setSettings={setSettings} onProfileSave={saveProfile} onSettingsSave={saveSettings} onPasswordReset={sendPasswordReset} busy={busy} email={session.user.email} />}
         {activeView === 'system-health' && session.user.email?.toLowerCase() === 'imenaking12@gmail.com' && <SystemHealthView report={healthReport} loading={healthLoading} onScan={runSystemHealth} metrics={adminMetrics} metricsLoading={adminMetricsLoading} />}
