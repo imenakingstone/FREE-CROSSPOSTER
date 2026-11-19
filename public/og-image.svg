@@ -1,29 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
-<title id="title">FREE CROSSPOSTER — Create once. Show up everywhere.</title>
-<desc id="desc">Plan, organize and publish social content from one workspace.</desc>
-<defs>
-  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0b1020"/><stop offset="1" stop-color="#17283a"/></linearGradient>
-  <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b7f47a"/><stop offset="1" stop-color="#6ee7b7"/></linearGradient>
-  <radialGradient id="glow"><stop stop-color="#a4f06b" stop-opacity=".24"/><stop offset="1" stop-color="#a4f06b" stop-opacity="0"/></radialGradient>
-  <filter id="blur"><feGaussianBlur stdDeviation="45"/></filter>
-</defs>
-<rect width="1200" height="630" fill="url(#bg)"/>
-<circle cx="1010" cy="130" r="260" fill="url(#glow)" filter="url(#blur)"/>
-<circle cx="110" cy="560" r="230" fill="url(#glow)" filter="url(#blur)"/>
-<g transform="translate(86 78)">
-  <rect width="66" height="66" rx="19" fill="url(#accent)"/>
-  <path d="M13 23h29l-7-7m7 7-7 7M53 43H24l7-7m-7 7 7 7M18 33h30" fill="none" stroke="#102013" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="88" y="43" fill="#f2f7ee" font-family="Arial,sans-serif" font-size="25" font-weight="800" letter-spacing="3">FREE CROSSPOSTER</text>
+<title id="title">FREE CROSSPOSTER — Create once. Show up everywhere.</title><desc id="desc">The FREE CROSSPOSTER share icon and social media publishing workspace.</desc>
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#030526"/><stop offset="1" stop-color="#090b35"/></linearGradient><linearGradient id="a" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#00e8e8"/><stop offset=".5" stop-color="#164cff"/><stop offset="1" stop-color="#ff20d5"/></linearGradient><radialGradient id="glow"><stop stop-color="#7a22ff" stop-opacity=".32"/><stop offset="1" stop-color="#030526" stop-opacity="0"/></radialGradient></defs>
+<rect width="1200" height="630" fill="url(#bg)"/><circle cx="900" cy="315" r="360" fill="url(#glow)"/>
+<g transform="translate(76 84)"><text x="0" y="0" fill="#fff" font-family="Arial,sans-serif" font-size="26" font-weight="700" letter-spacing="3">FREE CROSSPOSTER</text>
+<text x="0" y="150" fill="#fff" font-family="Arial,sans-serif" font-size="64" font-weight="800">Create once.</text><text x="0" y="228" fill="url(#a)" font-family="Arial,sans-serif" font-size="64" font-weight="800">Show up everywhere.</text>
+<text x="2" y="295" fill="#c8cbe4" font-family="Arial,sans-serif" font-size="25">Plan, organize and publish social content</text><text x="2" y="333" fill="#c8cbe4" font-family="Arial,sans-serif" font-size="25">from one powerful workspace.</text>
 </g>
-<g transform="translate(88 250)">
-  <text x="0" y="0" fill="#f5f7fb" font-family="Arial,sans-serif" font-size="68" font-weight="800">Create once.</text>
-  <text x="0" y="88" fill="#b7f47a" font-family="Arial,sans-serif" font-size="68" font-weight="800">Show up everywhere.</text>
-  <text x="2" y="158" fill="#c5d0df" font-family="Arial,sans-serif" font-size="26">Plan, organize and publish your social content</text>
-  <text x="2" y="198" fill="#c5d0df" font-family="Arial,sans-serif" font-size="26">from one calm, powerful workspace.</text>
-</g>
-<g transform="translate(90 548)" font-family="Arial,sans-serif" font-size="18" font-weight="700">
-  <rect width="128" height="42" rx="21" fill="#202c42"/><text x="64" y="27" fill="#f7f8fc" text-anchor="middle">INSTAGRAM</text>
-  <rect x="142" width="96" height="42" rx="21" fill="#202c42"/><text x="190" y="27" fill="#f7f8fc" text-anchor="middle">TIKTOK</text>
-  <rect x="252" width="110" height="42" rx="21" fill="#202c42"/><text x="307" y="27" fill="#f7f8fc" text-anchor="middle">YOUTUBE</text>
-</g>
+<g transform="translate(760 55) scale(.52)"><rect width="1024" height="1024" rx="90" fill="#030526"/><path d="M181 557C111 443 151 281 270 183C413 66 625 84 754 201C795 238 826 282 846 330" fill="none" stroke="url(#a)" stroke-width="54" stroke-linecap="round"/><path d="M802 203L810 166Q815 142 835 163L884 361Q892 390 862 385L678 354Q654 350 672 329Z" fill="#00dce8"/><path d="M842 414C914 534 871 700 750 801C610 918 397 902 268 787C227 750 196 706 176 658" fill="none" stroke="#d51bff" stroke-width="54" stroke-linecap="round"/><path d="M222 797L213 834Q208 858 188 837L139 639Q131 610 161 615L345 646Q369 650 351 671Z" fill="#f21ad8"/><g fill="none" stroke="#fff" stroke-width="58" stroke-linecap="round"><path d="M376 501L590 386M386 511L625 616"/></g><g fill="#fff"><circle cx="365" cy="500" r="64"/><circle cx="589" cy="379" r="64"/><circle cx="630" cy="621" r="64"/></g></g>
 </svg>
