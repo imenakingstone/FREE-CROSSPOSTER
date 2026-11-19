@@ -85,6 +85,12 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    const handleAuthHistoryBack = () => { setShowAuth(false); setMode('login') }
+    window.addEventListener('popstate', handleAuthHistoryBack)
+    return () => window.removeEventListener('popstate', handleAuthHistoryBack)
+  }, [])
+
+  useEffect(() => {
     if (!supabase) { setLoading(false); return }
     supabase.auth.getSession().then(({ data }) => { setSession(data.session); setLoading(false) })
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession))
@@ -319,7 +325,22 @@ export default function App() {
       setAuthBusy(false)
     }
   }
-  async function handleSignOut() { await supabase.auth.signOut(); setPosts([]); setSocialAccounts([]); setPostDestinations([]); setNotifications([]); setLogs([]); setSchedules([]) }
+  function openAuth(nextMode) {
+    setMode(nextMode); setNotice(''); setShowAuth(true)
+    window.history.pushState({ authView: true }, '', `${window.location.pathname}#${nextMode}`)
+  }
+  function closeAuth() {
+    setShowAuth(false); setMode('login'); setNotice('')
+    if (window.history.state?.authView) window.history.back()
+  }
+  async function handleSignOut() {
+    const { error } = await supabase.auth.signOut()
+    if (error) { setNotice(error.message || 'Could not sign out.'); return }
+    setPosts([]); setSocialAccounts([]); setPostDestinations([]); setNotifications([]); setLogs([]); setSchedules([])
+    setInboxConversations([]); setInboxMessages([]); setActiveConversationId(null)
+    setShowAuth(false); setMode('login'); setActiveView('overview'); setNotice('')
+    window.history.replaceState({}, '', window.location.pathname)
+  }
 
   async function connectInstagram() {
     setBusy(true); setNotice('')
@@ -493,7 +514,7 @@ export default function App() {
 
   if (!isSupabaseConfigured) return <SetupMessage />
   if (loading) return <main className="center-screen"><div className="loader" />Loading FREE CROSSPOSTER…</main>
-  if (!session) return showAuth ? <AuthScreen mode={mode} setMode={setMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} displayName={displayName} setDisplayName={setDisplayName} busy={authBusy} notice={notice} onSubmit={handleAuth} onGoogleSignIn={handleGoogleSignIn} /> : <LandingPage onGetStarted={() => { setMode('signup'); setShowAuth(true) }} onSignIn={() => { setMode('login'); setShowAuth(true) }} />
+  if (!session) return showAuth ? <AuthScreen mode={mode} setMode={setMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} displayName={displayName} setDisplayName={setDisplayName} busy={authBusy} notice={notice} onSubmit={handleAuth} onGoogleSignIn={handleGoogleSignIn} onBackToHome={closeAuth} /> : <LandingPage onGetStarted={() => openAuth('signup')} onSignIn={() => openAuth('login')} />
 
   const activeTitle = navItems.find(item => item.id === activeView)?.label || 'Overview'
   return <main className="dashboard socialync-shell">
@@ -552,8 +573,8 @@ function SystemHealthView({ report, loading, onScan, metrics, metricsLoading }) 
   </section>
 }
 
-function AuthScreen({ mode,setMode,email,setEmail,password,setPassword,displayName,setDisplayName,busy,notice,onSubmit,onGoogleSignIn }) {
-  return <main className="auth-layout"><section className="brand-panel"><div className="brand"><CrossposterLogo/> <span>FREE CROSSPOSTER</span></div><div className="hero-copy"><p className="eyebrow">ONE WORKFLOW. MULTIPLE CHANNELS.</p><h1>Your content.<br/><span>Everywhere.</span></h1><p className="muted">Create once, publish across your channels, and keep every conversation and campaign moving.</p><div className="auth-crosspost-visual" aria-label="Instagram, TikTok and YouTube orbit into the Crossposter logo"><div className="auth-crosspost-ring"/><div className="auth-crosspost-ring ring-two"/><div className="auth-orbit-track auth-track-one"><span className="auth-orbit-icon instagram"><PlatformLogo platform="instagram"/></span></div><div className="auth-orbit-track auth-track-two"><span className="auth-orbit-icon tiktok"><PlatformLogo platform="tiktok"/></span></div><div className="auth-orbit-track auth-track-three"><span className="auth-orbit-icon youtube"><PlatformLogo platform="youtube"/></span></div><span className="auth-crosspost-core"><CrossposterLogo/></span></div></div><div className="brand-foot"><ShieldCheck size={16}/> Your media is stored privately.</div></section><section className="auth-panel"><form className="auth-card" onSubmit={onSubmit}><div className="mobile-brand"><CrossposterLogo/> FREE CROSSPOSTER</div><p className="eyebrow">{mode === 'login' ? 'WELCOME BACK' : 'YOUR CREATOR WORKSPACE STARTS HERE'}</p><h2>{mode === 'login' ? 'Good to have you back.' : 'Create your account.'}</h2><p className="muted small">Sign in to manage your social channels in one place.</p><button type="button" className="google-auth-btn" onClick={onGoogleSignIn} disabled={busy}><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5Z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.72 7.18l7.64 5.93c4.46-4.12 7.12-10.2 7.12-17.58Z"/><path fill="#FBBC05" d="M10.53 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.87.93 7.53 2.56 10.78l7.97-6.19Z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.87l-7.64-5.93c-2.12 1.42-4.84 2.27-8.26 2.27-6.26 0-11.57-4.22-13.46-9.91l-7.98 6.19C6.51 43.62 14.62 48 24 48Z"/></svg>{busy?'Connecting…':'Continue with Google'}</button><div className="auth-divider"><span>OR CONTINUE WITH EMAIL</span></div>{mode === 'signup' && <label>Your name<input value={displayName} onChange={e=>setDisplayName(e.target.value)} placeholder="Your name" autoComplete="name"/></label>}<label>Email address<input type="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email"/></label><label>Password<input type="password" required minLength={6} value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 6 characters"/></label><button className="primary-btn full" disabled={busy}>{busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'} <span>↗</span></button><p className="switch-mode">{mode === 'login' ? "New around here?" : 'Already have an account?'} <button type="button" onClick={()=>setMode(mode==='login'?'signup':'login')}>{mode==='login'?'Create your account':'Sign in'}</button></p>{notice && <p className="notice">{notice}</p>}</form></section></main>
+function AuthScreen({ mode,setMode,email,setEmail,password,setPassword,displayName,setDisplayName,busy,notice,onSubmit,onGoogleSignIn,onBackToHome }) {
+  return <main className="auth-layout"><section className="brand-panel"><div className="brand"><CrossposterLogo/> <span>FREE CROSSPOSTER</span></div><div className="hero-copy"><p className="eyebrow">ONE WORKFLOW. MULTIPLE CHANNELS.</p><h1>Your content.<br/><span>Everywhere.</span></h1><p className="muted">Create once, publish across your channels, and keep every conversation and campaign moving.</p><div className="auth-crosspost-visual" aria-label="Instagram, TikTok and YouTube orbit into the Crossposter logo"><div className="auth-crosspost-ring"/><div className="auth-crosspost-ring ring-two"/><div className="auth-orbit-track auth-track-one"><span className="auth-orbit-icon instagram"><PlatformLogo platform="instagram"/></span></div><div className="auth-orbit-track auth-track-two"><span className="auth-orbit-icon tiktok"><PlatformLogo platform="tiktok"/></span></div><div className="auth-orbit-track auth-track-three"><span className="auth-orbit-icon youtube"><PlatformLogo platform="youtube"/></span></div><span className="auth-crosspost-core"><CrossposterLogo/></span></div></div><div className="brand-foot"><ShieldCheck size={16}/> Your media is stored privately.</div></section><section className="auth-panel"><form className="auth-card" onSubmit={onSubmit}><div className="mobile-brand"><CrossposterLogo/> FREE CROSSPOSTER</div><p className="eyebrow">{mode === 'login' ? 'WELCOME BACK' : 'YOUR CREATOR WORKSPACE STARTS HERE'}</p><h2>{mode === 'login' ? 'Good to have you back.' : 'Create your account.'}</h2><p className="muted small">Sign in to manage your social channels in one place.</p><button type="button" className="google-auth-btn" onClick={onGoogleSignIn} disabled={busy}><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5Z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.72 7.18l7.64 5.93c4.46-4.12 7.12-10.2 7.12-17.58Z"/><path fill="#FBBC05" d="M10.53 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.87.93 7.53 2.56 10.78l7.97-6.19Z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.87l-7.64-5.93c-2.12 1.42-4.84 2.27-8.26 2.27-6.26 0-11.57-4.22-13.46-9.91l-7.98 6.19C6.51 43.62 14.62 48 24 48Z"/></svg>{busy?'Connecting…':'Continue with Google'}</button><div className="auth-divider"><span>OR CONTINUE WITH EMAIL</span></div>{mode === 'signup' && <label>Your name<input value={displayName} onChange={e=>setDisplayName(e.target.value)} placeholder="Your name" autoComplete="name"/></label>}<label>Email address<input type="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email"/></label><label>Password<input type="password" required minLength={6} value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 6 characters"/></label><button className="primary-btn full" disabled={busy}>{busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'} <span>↗</span></button><button type="button" className="auth-home-link" onClick={onBackToHome}>← Back to home</button><p className="switch-mode">{mode === 'login' ? "New around here?" : 'Already have an account?'} <button type="button" onClick={()=>setMode(mode==='login'?'signup':'login')}>{mode==='login'?'Create your account':'Sign in'}</button></p>{notice && <p className="notice">{notice}</p>}</form></section></main>
 }
 function PageHeader({eyebrow,title,description,action}) { return <div className="welcome-row"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p className="muted">{description}</p></div>{action}</div> }
 function Overview({posts,accounts,schedules,logs,onNavigate}) {
