@@ -74,6 +74,18 @@ Deno.serve(async (req: Request) => {
     }
 
     const accessToken = tokenData.access_token as string;
+    // Save only the permissions Meta actually granted to this user.
+    const permissionsUrl = new URL(`https://graph.facebook.com/${API_VERSION}/me/permissions`);
+    permissionsUrl.searchParams.set("access_token", accessToken);
+    const permissionsResponse = await fetch(permissionsUrl, { signal: AbortSignal.timeout(15000) });
+    const permissionsData = await permissionsResponse.json();
+    if (!permissionsResponse.ok) {
+      console.error("Meta granted-permissions lookup failed", { status: permissionsResponse.status, code: permissionsData?.error?.code });
+      return page("Could not verify Instagram permissions", "Meta did not allow FREE CROSSPOSTER to verify the permissions granted to this connection. Please try again.");
+    }
+    const grantedScopes = Array.isArray(permissionsData?.data)
+      ? permissionsData.data.filter((item: any) => item?.status === "granted" && typeof item?.permission === "string").map((item: any) => item.permission)
+      : [];
     const accountUrl = new URL(`https://graph.facebook.com/${API_VERSION}/me/assigned_instagram_accounts`);
     accountUrl.searchParams.set("access_token", accessToken);
     const accountResponse = await fetch(accountUrl, { signal: AbortSignal.timeout(20000) });
@@ -118,7 +130,7 @@ Deno.serve(async (req: Request) => {
         access_token_encrypted: encryptedToken,
         refresh_token_encrypted: null,
         token_expires_at: expiresAt,
-        scopes: ["instagram_basic", "instagram_content_publish", "instagram_manage_comments", "instagram_manage_messages"],
+        scopes: grantedScopes,
         environment: "production",
         account_status: "connected",
         connected_at: now,
