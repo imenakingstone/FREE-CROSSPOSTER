@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://free-crossposter-zcpn.vercel.app/sitemap.xml
