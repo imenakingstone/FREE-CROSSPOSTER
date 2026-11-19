@@ -606,7 +606,7 @@ function CreatePost({caption,setCaption,file,setFile,selectedPlatforms,setSelect
         const mime=file.type==='image/png'?'image/png':file.type==='image/webp'?'image/webp':'image/jpeg'
         const blob=await new Promise((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error('Image export failed.')),mime,.92))
         const extension=mime==='image/png'?'png':mime==='image/webp'?'webp':'jpg'
-        preparedFile=new File([blob],file.name.replace(/\\.[^.]+$/,'')+'-edited.'+extension,{type:mime})
+        preparedFile=new File([blob],file.name.split('.').slice(0,-1).join('.')+'-edited.'+extension,{type:mime})
       }catch(error){setEditorError(error.message||'Could not apply the selected image edit.');return}
     }
     onSubmit(event,{...editorSettings,trimStart,trimEnd},{...platformSettings,instagram:{...platformSettings.instagram,location},youtube:{...platformSettings.youtube,title:youtubeTitle,description:youtubeDescription,tags:youtubeTags}},preparedFile)
