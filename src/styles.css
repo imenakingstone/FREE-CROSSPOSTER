@@ -840,3 +840,35 @@ body,.dashboard,.socialync-shell{background:#030526;color:#f5f7ff}
  .auth-orbit-track{transform:none!important}
  .auth-orbit-icon{transform:translate(0,-50%)!important}
 }
+
+
+/* Final interaction polish: auth orbit converges too; controls share the same identity */
+.auth-orbit-icon{--auth-radius:126px;animation:auth-icon-converge 4.6s cubic-bezier(.68,0,.32,1) infinite}
+.auth-track-two .auth-orbit-icon{animation-delay:-1.533s}
+.auth-track-three .auth-orbit-icon{animation-delay:-3.066s}
+.auth-orbit-icon .platform-logo{animation:auth-glyph-counter 4.6s linear infinite}
+.auth-track-two .auth-orbit-icon .platform-logo{animation-delay:-1.533s}
+.auth-track-three .auth-orbit-icon .platform-logo{animation-delay:-3.066s}
+@keyframes auth-icon-converge{
+  0%,38%{transform:translate(var(--auth-radius),-50%) scale(1);opacity:1}
+  53%,65%{transform:translate(0,-50%) scale(.08);opacity:0}
+  78%,100%{transform:translate(var(--auth-radius),-50%) scale(1);opacity:1}
+}
+@keyframes auth-glyph-counter{to{transform:rotate(-360deg)}}
+@media(max-width:850px){.auth-orbit-icon{--auth-radius:96px}}
+@media(max-width:520px){.auth-crosspost-visual{height:205px}.auth-orbit-icon{--auth-radius:78px;width:39px;height:39px;border-radius:12px}.auth-orbit-icon .platform-logo{width:21px;height:21px}}
+.socialync-shell .platform-choice.selected{border-color:rgba(0,229,239,.55);background:linear-gradient(110deg,rgba(0,229,239,.12),rgba(112,44,255,.14));box-shadow:inset 0 0 0 1px rgba(0,229,239,.08)}
+.socialync-shell .platform-choice.selected .check{color:#00e5ef}
+.socialync-shell .upload-zone{background:linear-gradient(145deg,rgba(11,24,73,.72),rgba(5,11,47,.85));border-color:rgba(119,145,255,.32);transition:border-color .2s ease,background .2s ease}
+.socialync-shell .upload-zone:hover{border-color:#00e5ef;background:rgba(0,229,239,.055)}
+.socialync-shell .upload-icon{background:rgba(0,229,239,.11);color:#00e5ef}
+.socialync-shell .platform-choice{background:#070e3a;border-color:rgba(119,145,255,.2);color:#eaf0ff}
+.socialync-shell .platform-mark.instagram{background:linear-gradient(135deg,#833ab4,#fd1d1d,#fcb045)}
+.socialync-shell .platform-mark.tiktok{background:#050711;border-color:#25f4ee}
+.socialync-shell .platform-mark.youtube{background:#ff0033}
+.socialync-shell .text-action,.socialync-shell .secondary-action{color:#00e5ef}
+.socialync-shell .status-card,.socialync-shell .privacy-card{background:linear-gradient(145deg,rgba(12,22,66,.92),rgba(7,12,48,.96))}
+@media(prefers-reduced-motion:reduce){
+ .auth-orbit-icon,.auth-orbit-icon .platform-logo{animation:none!important}
+ .auth-orbit-icon{transform:translate(0,-50%) scale(.8)!important}
+}
