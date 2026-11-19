@@ -152,7 +152,6 @@ export default function App() {
 
   useEffect(() => {
     if (activeView !== 'inbox' || !activeConversationId) { setInboxMessages([]); return }
-    let alive = true
     const refreshMessages = async () => {
       await loadInboxMessages(activeConversationId)
     }
@@ -160,7 +159,7 @@ export default function App() {
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') refreshMessages()
     }, 12000)
-    return () => { alive = false; window.clearInterval(timer) }
+    return () => { window.clearInterval(timer) }
   }, [activeConversationId, activeView])
 
   async function refreshWorkspace() {
@@ -299,7 +298,13 @@ export default function App() {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
       }
-    } catch (error) { setNotice(error.message || 'Authentication failed.') } finally { setAuthBusy(false) }
+    } catch (error) {
+      const code = error?.code || error?.name
+      const status = Number(error?.status || error?.statusCode || 0)
+      if (code === 'over_email_send_rate_limit' || status === 429) setNotice('Supabase has temporarily limited confirmation emails. The built-in sender allows only 2 emails per hour. Configure custom SMTP before accepting public registrations.')
+      else if (code === 'email_address_not_authorized') setNotice('Supabase built-in email can only send to authorized team addresses. Configure custom SMTP to allow public signups.')
+      else setNotice(error.message || 'Authentication failed.')
+    } finally { setAuthBusy(false) }
   }
   async function handleGoogleSignIn() {
     setAuthBusy(true); setNotice('')
