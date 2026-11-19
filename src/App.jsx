@@ -329,24 +329,24 @@ export default function App() {
     }
   }
 
-  async function createDraft(event, nextEditorSettings = editorSettings, nextPlatformSettings = platformSettings) {
+  async function createDraft(event, nextEditorSettings = editorSettings, nextPlatformSettings = platformSettings, preparedFile = file) {
     event.preventDefault()
-    if (!caption.trim() && !file) return setNotice('Add a caption or choose a photo/video first.')
+    if (!caption.trim() && !preparedFile) return setNotice('Add a caption or choose a photo/video first.')
     if (!selectedPlatforms.length) return setNotice('Choose at least one destination.')
     setBusy(true); setNotice('')
     try {
       let mediaPath = null, mediaType = null
-      if (file) {
+      if (preparedFile) {
         const allowed = ['image/jpeg','image/png','image/webp','image/gif','video/mp4','video/quicktime','video/webm']
-        if (!allowed.includes(file.type)) throw new Error('This file format is not supported.')
-        if (file.size > 50 * 1024 * 1024) throw new Error('File is larger than the 50 MB limit.')
-        const extension = file.name.split('.').pop()?.toLowerCase() || 'bin'
+        if (!allowed.includes(preparedFile.type)) throw new Error('This file format is not supported.')
+        if (preparedFile.size > 50 * 1024 * 1024) throw new Error('File is larger than the 50 MB limit.')
+        const extension = preparedFile.name.split('.').pop()?.toLowerCase() || 'bin'
         mediaPath = `${session.user.id}/${crypto.randomUUID()}.${extension}`
-        const { error } = await supabase.storage.from('user-media').upload(mediaPath, file, { contentType: file.type, upsert: false })
+        const { error } = await supabase.storage.from('user-media').upload(mediaPath, preparedFile, { contentType: preparedFile.type, upsert: false })
         if (error) throw error
-        mediaType = file.type.startsWith('video/') ? 'video' : 'image'
+        mediaType = preparedFile.type.startsWith('video/') ? 'video' : 'image'
       }
-      const { data: post, error: postError } = await supabase.from('posts').insert({ user_id: session.user.id, caption: caption.trim(), media_path: mediaPath, media_type: mediaType, original_filename: file?.name || null, status: 'draft', editor_settings: nextEditorSettings, platform_settings: nextPlatformSettings }).select('id').single()
+      const { data: post, error: postError } = await supabase.from('posts').insert({ user_id: session.user.id, caption: caption.trim(), media_path: mediaPath, media_type: mediaType, original_filename: preparedFile?.name || null, status: 'draft', editor_settings: nextEditorSettings, platform_settings: nextPlatformSettings }).select('id').single()
       if (postError) throw postError
       const destinations = selectedPlatforms.flatMap(platform => {
         const linkedAccounts = socialAccounts.filter(item => item.platform === platform && item.account_status === 'connected')
@@ -562,6 +562,7 @@ function CreatePost({caption,setCaption,file,setFile,selectedPlatforms,setSelect
   const [activeEditor,setActiveEditor]=useState('instagram')
   const [activeTool,setActiveTool]=useState('media')
   const [previewUrl,setPreviewUrl]=useState('')
+  const [editorError,setEditorError]=useState('')
   const [youtubeTitle,setYoutubeTitle]=useState(platformSettings.youtube?.title||'')
   const [youtubeDescription,setYoutubeDescription]=useState(platformSettings.youtube?.description||'')
   const [youtubeTags,setYoutubeTags]=useState(platformSettings.youtube?.tags||'')
@@ -579,7 +580,37 @@ function CreatePost({caption,setCaption,file,setFile,selectedPlatforms,setSelect
   function updateEditor(patch){setEditorSettings(current=>({...current,...patch}))}
   function updatePlatform(platform,patch){setPlatformSettings(current=>({...current,[platform]:{...(current[platform]||{}),...patch}}))}
   function chooseFile(next){setFile(next);setActiveTool('media')}
-  function submit(event){event.preventDefault();onSubmit(event,{...editorSettings,trimStart,trimEnd},{...platformSettings,instagram:{...platformSettings.instagram,location},youtube:{...platformSettings.youtube,title:youtubeTitle,description:youtubeDescription,tags:youtubeTags}})}
+  async function submit(event){
+    event.preventDefault()
+    let preparedFile=file
+    if(isImage&&file&&file.type!=='image/gif'&&(editorSettings.filter!=='original'||editorSettings.aspect!=='original')){
+      try{
+        const bitmap=await createImageBitmap(file)
+        const ratios={square:1,portrait:4/5,landscape:16/9}
+        const ratio=ratios[editorSettings.aspect]
+        let sx=0,sy=0,sw=bitmap.width,sh=bitmap.height
+        if(ratio){
+          const sourceRatio=bitmap.width/bitmap.height
+          if(sourceRatio>ratio){sw=bitmap.height*ratio;sx=(bitmap.width-sw)/2}
+          else{sh=bitmap.width/ratio;sy=(bitmap.height-sh)/2}
+        }
+        const canvas=document.createElement('canvas')
+        canvas.width=ratio?Math.round(1080*(ratio>=1?1:ratio)):bitmap.width
+        canvas.height=ratio?Math.round(1080/(ratio>=1?ratio:ratio)):bitmap.height
+        const ctx=canvas.getContext('2d')
+        if(!ctx)throw new Error('Could not prepare the edited image.')
+        const selectedFilter=filters.find(item=>item.id===editorSettings.filter)||filters[0]
+        ctx.filter=selectedFilter.css
+        ctx.drawImage(bitmap,sx,sy,sw,sh,0,0,canvas.width,canvas.height)
+        bitmap.close?.()
+        const mime=file.type==='image/png'?'image/png':file.type==='image/webp'?'image/webp':'image/jpeg'
+        const blob=await new Promise((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error('Image export failed.')),mime,.92))
+        const extension=mime==='image/png'?'png':mime==='image/webp'?'webp':'jpg'
+        preparedFile=new File([blob],file.name.replace(/\\.[^.]+$/,'')+'-edited.'+extension,{type:mime})
+      }catch(error){setEditorError(error.message||'Could not apply the selected image edit.');return}
+    }
+    onSubmit(event,{...editorSettings,trimStart,trimEnd},{...platformSettings,instagram:{...platformSettings.instagram,location},youtube:{...platformSettings.youtube,title:youtubeTitle,description:youtubeDescription,tags:youtubeTags}},preparedFile)
+  }
   const filters=[
     {id:'original',label:'Original',css:'none'},
     {id:'vivid',label:'Vivid',css:'saturate(1.45) contrast(1.08)'},
@@ -625,8 +656,8 @@ function CreatePost({caption,setCaption,file,setFile,selectedPlatforms,setSelect
                 <button type="button" className={activeTool==='trim'?'active':''} onClick={()=>setActiveTool('trim')} disabled={!isVideo}><Scissors size={14}/> Trim</button>
               </div>
               {activeTool==='media'&&<div className="creator-tool-panel"><h3>Crop & format</h3><p>Choose a preview format for the selected destination.</p><div className="creator-format-grid">{[{id:'original',label:'Original',shape:'format-original'},{id:'square',label:'Square',shape:'format-square'},{id:'portrait',label:'4:5 Portrait',shape:'format-portrait'},{id:'landscape',label:'16:9',shape:'format-landscape'}].map(item=><button type="button" key={item.id} className={editorSettings.aspect===item.id?'selected':''} onClick={()=>updateEditor({aspect:item.id})}><i className={item.shape}/>{item.label}</button>)}</div><div className="creator-tool-note"><Crop size={15}/> Preview crop selection. Original media is kept safe in your draft.</div></div>}
-              {activeTool==='filters'&&<div className="creator-tool-panel"><h3>Creative filters</h3><p>Tap a look to preview it on your media.</p><div className="creator-filter-grid">{filters.map(item=><button type="button" key={item.id} className={editorSettings.filter===item.id?'selected':''} onClick={()=>updateEditor({filter:item.id})}><span className="creator-filter-thumb" style={{filter:item.css}}>{previewUrl&&isImage?<img src={previewUrl} alt=""/>:<Camera size={20}/>}</span><b>{item.label}</b></button>)}</div><div className="creator-tool-note"><Sparkles size={15}/> Filters currently affect the on-screen preview; processed-media export is a separate publishing-engine task.</div></div>}
-              {activeTool==='trim'&&<div className="creator-tool-panel"><h3>Video cut & trim</h3><p>Set the clip's in and out points.</p>{previewUrl&&isVideo?<video className="creator-trim-video" src={previewUrl} controls playsInline/>:<div className="creator-trim-empty"><Film size={23}/> Select a video to trim</div>}<label>Start point <b>{trimStart}%</b><input type="range" min="0" max={Math.max(0,trimEnd-1)} value={trimStart} onChange={e=>{const v=Number(e.target.value);setTrimStart(v);updateEditor({trimStart:v})}}/></label><label>End point <b>{trimEnd}%</b><input type="range" min={Math.min(100,trimStart+1)} max="100" value={trimEnd} onChange={e=>{const v=Number(e.target.value);setTrimEnd(v);updateEditor({trimEnd:v})}}/></label><div className="creator-tool-note"><Scissors size={15}/> Trim points are saved with the draft as edit instructions. Video rendering/export is not connected yet.</div></div>}
+              {activeTool==='filters'&&<div className="creator-tool-panel"><h3>Creative filters</h3><p>Tap a look to preview it on your media.</p><div className="creator-filter-grid">{filters.map(item=><button type="button" key={item.id} className={editorSettings.filter===item.id?'selected':''} onClick={()=>updateEditor({filter:item.id})}><span className="creator-filter-thumb" style={{filter:item.css}}>{previewUrl&&isImage?<img src={previewUrl} alt=""/>:<Camera size={20}/>}</span><b>{item.label}</b></button>)}</div><div className="creator-tool-note"><Sparkles size={15}/> Selected filters and crop are applied to still-image files when saving the draft. GIFs remain unchanged.</div></div>}
+              {editorError&&<p className="notice">{editorError}</p>}{activeTool==='trim'&&<div className="creator-tool-panel"><h3>Video cut & trim</h3><p>Set the clip's in and out points.</p>{previewUrl&&isVideo?<video className="creator-trim-video" src={previewUrl} controls playsInline/>:<div className="creator-trim-empty"><Film size={23}/> Select a video to trim</div>}<label>Start point <b>{trimStart}%</b><input type="range" min="0" max={Math.max(0,trimEnd-1)} value={trimStart} onChange={e=>{const v=Number(e.target.value);setTrimStart(v);updateEditor({trimStart:v})}}/></label><label>End point <b>{trimEnd}%</b><input type="range" min={Math.min(100,trimStart+1)} max="100" value={trimEnd} onChange={e=>{const v=Number(e.target.value);setTrimEnd(v);updateEditor({trimEnd:v})}}/></label><div className="creator-tool-note"><Scissors size={15}/> Trim points are saved with the draft as edit instructions. Video rendering/export is not connected yet.</div></div>}
             </div>
           </div>
         </section>
