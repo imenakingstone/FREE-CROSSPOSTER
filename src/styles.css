@@ -1002,3 +1002,14 @@ body,.dashboard,.socialync-shell{background:#030526;color:#f5f7ff}
 @media(max-width:1150px){.creator-workspace{grid-template-columns:minmax(0,1fr) 270px}.creator-media-layout{grid-template-columns:1fr}.creator-preview-column{align-items:flex-start}.creator-phone-preview,.creator-upload-button,.creator-file-info{width:min(100%,340px)}}
 @media(max-width:850px){.creator-workspace{grid-template-columns:1fr}.creator-side-column{grid-template-columns:1fr 1fr}.creator-step-pill{display:none}}
 @media(max-width:600px){.creator-heading{align-items:flex-start;flex-direction:column}.creator-heading h1{font-size:35px}.creator-platform-tabs{width:100%}.creator-platform-tabs button{flex:1;padding:9px 8px;gap:6px}.creator-platform-tabs button small{display:none}.creator-card{padding:15px}.creator-media-layout{grid-template-columns:1fr}.creator-preview-column{align-items:center}.creator-edit-tools{width:100%}.creator-settings-grid{grid-template-columns:1fr}.creator-setting-row.full-setting{grid-column:auto}.creator-side-column{grid-template-columns:1fr}.creator-card-head{align-items:flex-start}.creator-coming-soon{display:none}}
+
+
+/* Inbox live refresh controls */
+.inbox-list-heading{display:flex;align-items:center;gap:10px}
+.inbox-list-heading>span{margin-left:auto}
+.inbox-refresh{width:30px;height:30px;display:grid;place-items:center;border:1px solid rgba(119,145,255,.2);border-radius:9px;background:rgba(0,229,239,.06);color:#8eeef4;cursor:pointer}
+.inbox-refresh:disabled{opacity:.45;cursor:wait}
+.inbox-refreshing{animation:inbox-refresh-spin .8s linear infinite}
+.inbox-filters{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.inbox-filters>small{color:#7385b8;font-size:7px}
+@keyframes inbox-refresh-spin{to{transform:rotate(360deg)}}
