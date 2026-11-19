@@ -15,6 +15,12 @@ const platforms = [
   { id: 'instagram', label: 'Instagram', mark: 'IG' },
   { id: 'tiktok', label: 'TikTok', mark: '♪' },
 ]
+const APP_PRODUCTION_URL = 'https://free-crossposter-zcpn.vercel.app'
+function getAuthRedirectUrl() {
+  const localHost = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+  return localHost ? window.location.origin : APP_PRODUCTION_URL
+}
+
 const navItems = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'create', label: 'Create post', icon: Plus },
@@ -67,6 +73,7 @@ export default function App() {
   const [inboxDraft, setInboxDraft] = useState('')
   const [inboxLoading, setInboxLoading] = useState(false)
   const [inboxSending, setInboxSending] = useState(false)
+  const [inboxLastSynced, setInboxLastSynced] = useState(null)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -114,8 +121,19 @@ export default function App() {
   }, [session?.user?.id, activeView])
   useEffect(() => {
     if (!session?.user?.id || activeView !== 'inbox') return
-    setInboxLoading(true)
-    loadInboxConversations().finally(() => setInboxLoading(false))
+    let alive = true
+    const refresh = async (showLoader = false) => {
+      if (showLoader) setInboxLoading(true)
+      try {
+        await loadInboxConversations()
+        if (activeConversationId) await loadInboxMessages(activeConversationId)
+        if (alive) setInboxLastSynced(new Date())
+      } finally { if (alive && showLoader) setInboxLoading(false) }
+    }
+    refresh(true)
+    const poll = window.setInterval(() => {
+      if (document.visibilityState === 'visible') refresh(false)
+    }, 12000)
     const channel = supabase.channel('inbox-live-' + session.user.id)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inbox_messages', filter: 'user_id=eq.' + session.user.id }, () => {
         if (activeConversationId) loadInboxMessages(activeConversationId)
@@ -123,7 +141,7 @@ export default function App() {
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inbox_conversations', filter: 'user_id=eq.' + session.user.id }, () => loadInboxConversations())
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    return () => { alive = false; window.clearInterval(poll); supabase.removeChannel(channel) }
   }, [session?.user?.id, activeView, activeConversationId])
   useEffect(() => {
     if (activeView === 'inbox' && activeConversationId) loadInboxMessages(activeConversationId)
@@ -248,7 +266,7 @@ export default function App() {
     event.preventDefault(); setAuthBusy(true); setNotice('')
     try {
       if (mode === 'signup') {
-        const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { display_name: displayName } } })
+        const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { display_name: displayName }, emailRedirectTo: `${getAuthRedirectUrl()}/` } })
         if (error) throw error
         setNotice(data.session ? 'Your account is ready.' : 'Check your email for a confirmation link, then sign in.')
       } else {
@@ -262,7 +280,7 @@ export default function App() {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: window.location.origin }
+        options: { redirectTo: `${getAuthRedirectUrl()}/` }
       })
       if (error) throw error
     } catch (error) {
@@ -462,7 +480,7 @@ export default function App() {
         {activeView === 'drafts' && <Drafts posts={draftPosts} destinations={postDestinations} accounts={socialAccounts} onDelete={deleteDraft} onSave={saveCaption} onPublish={publishDestination} onAssignAccount={assignDestinationAccount} publishingPostId={publishingPostId} />}
         {activeView === 'calendar' && <CalendarView posts={posts} schedules={schedules} onSchedule={schedulePost} onCancel={cancelSchedule} busy={busy} schedulePostId={schedulePostId} setSchedulePostId={setSchedulePostId} destinationId={scheduleDestinationId} setDestinationId={setScheduleDestinationId} scheduleAt={scheduleAt} setScheduleAt={setScheduleAt} destinations={destRows} />}
         {activeView === 'history' && <HistoryView logs={logs} posts={posts} />}
-        {activeView === 'inbox' && <InboxView conversations={inboxConversations} messages={inboxMessages} activeId={activeConversationId} onSelect={selectInboxConversation} draft={inboxDraft} setDraft={setInboxDraft} onSend={sendInboxMessage} loading={inboxLoading} sending={inboxSending} accounts={socialAccounts} />}
+        {activeView === 'inbox' && <InboxView conversations={inboxConversations} messages={inboxMessages} activeId={activeConversationId} onSelect={selectInboxConversation} draft={inboxDraft} setDraft={setInboxDraft} onSend={sendInboxMessage} loading={inboxLoading} sending={inboxSending} accounts={socialAccounts} onRefresh={async()=>{setInboxLoading(true);try{await loadInboxConversations();if(activeConversationId)await loadInboxMessages(activeConversationId);setInboxLastSynced(new Date())}finally{setInboxLoading(false)}}} lastSynced={inboxLastSynced} />}
         {activeView === 'accounts' && <Accounts accounts={socialAccounts} onConnect={connectInstagram} onConnectTikTok={() => connectPlatform('tiktok')} onDisconnect={disconnectAccount} busy={busy} />}
         {activeView === 'settings' && <SettingsView profile={profile} setProfile={setProfile} settings={settings} setSettings={setSettings} onProfileSave={saveProfile} onSettingsSave={saveSettings} onPasswordReset={sendPasswordReset} busy={busy} email={session.user.email} />}
         {activeView === 'system-health' && session.user.email?.toLowerCase() === 'imenaking12@gmail.com' && <SystemHealthView report={healthReport} loading={healthLoading} onScan={runSystemHealth} metrics={adminMetrics} metricsLoading={adminMetricsLoading} />}
@@ -856,7 +874,7 @@ function Accounts({accounts,onConnect,onConnectTikTok,onDisconnect,busy}) {
     </article>
   </div></>
 }
-function InboxView({conversations,messages,activeId,onSelect,draft,setDraft,onSend,loading,sending,accounts}) {
+function InboxView({conversations,messages,activeId,onSelect,draft,setDraft,onSend,loading,sending,accounts,onRefresh,lastSynced}) {
   const active=conversations.find(item=>item.id===activeId)
   const connected=accounts.some(item=>item.platform==='instagram'&&item.account_status==='connected')
   const webhookUrl='https://apggccljgfodaxdpxptc.supabase.co/functions/v1/meta-messaging-webhook'
@@ -865,15 +883,15 @@ function InboxView({conversations,messages,activeId,onSelect,draft,setDraft,onSe
     {!connected && <div className="card inbox-setup-note"><MessageSquare size={22}/><div><strong>Connect an Instagram professional account to get started</strong><p className="muted small">Connect an Instagram Business or Creator account in Connected accounts. Personal Instagram profiles are not supported by Meta's messaging API.</p></div></div>}
     <div className="card inbox-shell">
       <aside className="inbox-list-panel">
-        <div className="inbox-list-heading"><strong>Messages</strong><span>{conversations.length}</span></div>
-        <div className="inbox-filters"><span className="inbox-channel-tag instagram">Instagram Direct</span></div>
+        <div className="inbox-list-heading"><strong>Messages</strong><span>{conversations.length}</span><button type="button" className="inbox-refresh" onClick={onRefresh} disabled={loading} title="Refresh Instagram messages"><RefreshCw size={14} className={loading?'inbox-refreshing':''}/></button></div>
+        <div className="inbox-filters"><span className="inbox-channel-tag instagram">Instagram Direct</span><small>{lastSynced?'Synced '+lastSynced.toLocaleTimeString():'Waiting for sync'} · auto refresh 12s</small></div>
         <div className="inbox-conversation-list">
           {conversations.map(item=><button key={item.id} className={'inbox-conversation '+(activeId===item.id?'active':'')} onClick={()=>onSelect(item)}>
             <span className={'inbox-avatar '+item.platform}>{item.platform==='instagram'?'◎':'f'}</span>
             <span className="inbox-conversation-copy"><strong>{item.participant_username?'@'+item.participant_username:item.participant_name||'Customer'}</strong><small>{item.last_message_text||'New conversation'}</small></span>
             <span className="inbox-conversation-meta">{item.last_message_at&&<small>{new Date(item.last_message_at).toLocaleDateString()}</small>}{item.unread_count>0&&<i>{item.unread_count}</i>}</span>
           </button>)}
-          {!conversations.length&&<div className="inbox-empty-list">{loading?'Loading conversations…':'No conversations yet'}</div>}
+          {!conversations.length&&<div className="inbox-empty-list">{loading?'Syncing Instagram inbox…':'No conversations synced yet'}</div>}
         </div>
       </aside>
       <section className="inbox-chat-panel">
