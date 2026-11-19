@@ -563,6 +563,7 @@ function CreatePost({caption,setCaption,file,setFile,selectedPlatforms,setSelect
   const [activeTool,setActiveTool]=useState('media')
   const [previewUrl,setPreviewUrl]=useState('')
   const [editorError,setEditorError]=useState('')
+  const [preparing,setPreparing]=useState(false)
   const [youtubeTitle,setYoutubeTitle]=useState(platformSettings.youtube?.title||'')
   const [youtubeDescription,setYoutubeDescription]=useState(platformSettings.youtube?.description||'')
   const [youtubeTags,setYoutubeTags]=useState(platformSettings.youtube?.tags||'')
@@ -580,8 +581,52 @@ function CreatePost({caption,setCaption,file,setFile,selectedPlatforms,setSelect
   function updateEditor(patch){setEditorSettings(current=>({...current,...patch}))}
   function updatePlatform(platform,patch){setPlatformSettings(current=>({...current,[platform]:{...(current[platform]||{}),...patch}}))}
   function chooseFile(next){setFile(next);setActiveTool('media')}
+  async function trimVideoFile(sourceFile,startPercent,endPercent){
+    if(!window.MediaRecorder)throw new Error('Video trimming is not supported by this browser.')
+    const sourceUrl=URL.createObjectURL(sourceFile)
+    const video=document.createElement('video')
+    video.src=sourceUrl
+    video.preload='auto'
+    video.playsInline=true
+    video.muted=false
+    try{
+      await new Promise((resolve,reject)=>{
+        video.onloadedmetadata=resolve
+        video.onerror=()=>reject(new Error('Could not read this video file.'))
+        video.load()
+      })
+      const start=video.duration*(startPercent/100)
+      const end=video.duration*(endPercent/100)
+      if(end-start<0.25)throw new Error('Choose a video trim range longer than a quarter second.')
+      video.currentTime=start
+      await new Promise((resolve,reject)=>{video.onseeked=resolve;video.onerror=()=>reject(new Error('Could not seek to the selected trim point.'))})
+      const stream=video.captureStream?video.captureStream():video.mozCaptureStream?.()
+      if(!stream)throw new Error('This browser cannot export the trimmed video.')
+      const mime=MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')?'video/webm;codecs=vp9,opus':'video/webm'
+      const recorder=new MediaRecorder(stream,{mimeType:mime})
+      const chunks=[]
+      const finished=new Promise((resolve,reject)=>{
+        recorder.ondataavailable=e=>{if(e.data?.size)chunks.push(e.data)}
+        recorder.onerror=()=>reject(new Error('Video export failed. Try a shorter clip or another browser.'))
+        recorder.onstop=()=>resolve()
+      })
+      recorder.start(250)
+      await video.play()
+      await new Promise(resolve=>setTimeout(resolve,Math.max(250,(end-start)*1000)))
+      video.pause()
+      if(recorder.state!=='inactive')recorder.stop()
+      await finished
+      stream.getTracks().forEach(track=>track.stop())
+      const blob=new Blob(chunks,{type:'video/webm'})
+      if(!blob.size)throw new Error('The trimmed video export was empty.')
+      const base=sourceFile.name.split('.').slice(0,-1).join('.')||'video'
+      return new File([blob],base+'-trimmed.webm',{type:'video/webm'})
+    }finally{URL.revokeObjectURL(sourceUrl)}
+  }
   async function submit(event){
     event.preventDefault()
+    setPreparing(true)
+    setEditorError('')
     let preparedFile=file
     if(isImage&&file&&file.type!=='image/gif'&&(editorSettings.filter!=='original'||editorSettings.aspect!=='original')){
       try{
@@ -609,6 +654,11 @@ function CreatePost({caption,setCaption,file,setFile,selectedPlatforms,setSelect
         preparedFile=new File([blob],file.name.split('.').slice(0,-1).join('.')+'-edited.'+extension,{type:mime})
       }catch(error){setEditorError(error.message||'Could not apply the selected image edit.');return}
     }
+    if(isVideo&&file&&(trimStart>0||trimEnd<100)){
+      try{preparedFile=await trimVideoFile(file,trimStart,trimEnd)}
+      catch(error){setEditorError(error.message||'Could not trim the selected video.');setPreparing(false);return}
+    }
+    setPreparing(false)
     onSubmit(event,{...editorSettings,trimStart,trimEnd},{...platformSettings,instagram:{...platformSettings.instagram,location},youtube:{...platformSettings.youtube,title:youtubeTitle,description:youtubeDescription,tags:youtubeTags}},preparedFile)
   }
   const filters=[
@@ -677,7 +727,7 @@ function CreatePost({caption,setCaption,file,setFile,selectedPlatforms,setSelect
           <div className="creator-destination-option is-unavailable"><span className="creator-destination-icon facebook"><span>f</span></span><span><b>Facebook</b><small>Meta Page connection required</small></span><span className="creator-lock">SOON</span></div>
           <div className="creator-destination-note">Your media is uploaded privately to your workspace. Each connected destination is tracked separately.</div>
         </section>
-        <section className="creator-card creator-save-card"><span className="creator-save-icon"><CrossposterLogo/></span><h3>Ready to route your post?</h3><p>Save the source post and its platform-specific settings as a draft. Publish when the destination is connected and supported.</p><button className="creator-save-button" disabled={busy}>{busy?'Saving draft…':'Save as draft'} <Send size={15}/></button><span className="creator-save-foot"><ShieldCheck size={13}/> Your draft stays private</span></section>
+        <section className="creator-card creator-save-card"><span className="creator-save-icon"><CrossposterLogo/></span><h3>Ready to route your post?</h3><p>Save the source post and its platform-specific settings as a draft. Publish when the destination is connected and supported.</p><button className="creator-save-button" disabled={busy||preparing}>{preparing?'Preparing media…':busy?'Saving draft…':'Save as draft'} <Send size={15}/></button><span className="creator-save-foot"><ShieldCheck size={13}/> Your draft stays private</span></section>
       </aside>
     </form>
   </section>
