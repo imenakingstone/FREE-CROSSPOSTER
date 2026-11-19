@@ -1,13 +1,13 @@
 {
   "name": "FREE CROSSPOSTER",
   "short_name": "Crossposter",
-  "description": "Plan, organize and publish social media content from one workspace.",
+  "description": "Create one post and distribute it across your connected social channels.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#030526",
   "theme_color": "#030526",
   "icons": [
-    { "src": "/crossposter.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    { "src": "/crossposter.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]
 }
