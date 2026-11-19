@@ -151,7 +151,16 @@ export default function App() {
   }, [session?.user?.id, activeView])
 
   useEffect(() => {
-    if (activeView === 'inbox' && activeConversationId) loadInboxMessages(activeConversationId)
+    if (activeView !== 'inbox' || !activeConversationId) { setInboxMessages([]); return }
+    let alive = true
+    const refreshMessages = async () => {
+      await loadInboxMessages(activeConversationId)
+    }
+    refreshMessages()
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') refreshMessages()
+    }, 12000)
+    return () => { alive = false; window.clearInterval(timer) }
   }, [activeConversationId, activeView])
 
   async function refreshWorkspace() {
@@ -916,10 +925,10 @@ function InboxView({conversations,messages,activeId,onSelect,draft,setDraft,onSe
           <header className="inbox-chat-header"><div><strong>{active.participant_username?'@'+active.participant_username:active.participant_name||'Customer'}</strong><span>Instagram Direct · {active.status}</span></div><span className="inbox-channel-tag instagram">Instagram</span></header>
           <div className="inbox-message-stream">
             {messages.map(message=><div className={'inbox-bubble-row '+message.direction} key={message.id}><div className="inbox-bubble"><p>{message.message_text||'Media attachment'}</p>{message.attachments?.length>0&&<small>{message.attachments.length} attachment(s) · media previews are not available yet</small>}<time>{new Date(message.sent_at).toLocaleString()}</time></div></div>)}
-            {!messages.length&&<div className="inbox-empty-chat">Your conversation will appear here.</div>}
+            {!messages.length&&<div className="inbox-empty-chat">No messages have been synced for this conversation yet.</div>}
           </div>
           <form className="inbox-reply-form" onSubmit={onSend}><textarea rows="2" maxLength="2000" value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Write a reply…" /><button className="primary-btn" disabled={sending||!draft.trim()}>{sending?'Sending…':'Send reply'} <Send size={15}/></button><small>Text replies only · available during Meta's 24-hour standard messaging window.</small></form>
-        </> : <div className="inbox-empty-chat"><MessageSquare size={30}/><h3>Your conversations live here.</h3><p>Choose a conversation or connect a social account to get started.</p></div>}
+        </> : <div className="inbox-empty-chat"><MessageSquare size={30}/><h3>Your conversations live here.</h3><p>Connect an Instagram professional account, then refresh to import existing conversations.</p></div>}
       </section>
     </div>
     <details className="card inbox-webhook-guide"><summary>Developer setup · connect Meta webhooks</summary><p className="muted small">Add this HTTPS callback URL to the Webhooks product in your Meta app. Set the verification token as the Supabase Edge Function secret META_WEBHOOK_VERIFY_TOKEN. Your existing META_APP_SECRET is used to validate webhook signatures.</p><code className="webhook-url">{webhookUrl}</code><p className="muted small">Subscribe the Instagram object to the <code>messages</code> event. Meta App Review must approve messaging permissions before ordinary customers' conversations are available. Keep the standard reply window in mind.</p></details>
