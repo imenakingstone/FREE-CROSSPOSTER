@@ -1,1 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ff4f91"/><stop offset=".58" stop-color="#ff765c"/><stop offset="1" stop-color="#ffd166"/></linearGradient></defs><rect width="64" height="64" rx="18" fill="url(#g)"/><g fill="none" stroke="#170c18" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22h29l-7-7m7 7-7 7M52 42H23l7-7m-7 7 7 7"/><path d="M16 32h32" opacity=".45"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="t d">
+<title id="t">FREE CROSSPOSTER</title><desc id="d">A white share symbol surrounded by two gradient circular arrows on a deep navy background.</desc>
+<defs>
+ <linearGradient id="top" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#b000ff"/><stop offset=".42" stop-color="#0757ff"/><stop offset="1" stop-color="#00e8e8"/></linearGradient>
+ <linearGradient id="bottom" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ff22d8"/><stop offset=".45" stop-color="#a000ff"/><stop offset="1" stop-color="#073dff"/></linearGradient>
+ <linearGradient id="tip1" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#00f1dc"/><stop offset="1" stop-color="#00aaff"/></linearGradient>
+ <linearGradient id="tip2" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ff32d5"/><stop offset="1" stop-color="#b000ff"/></linearGradient>
+</defs>
+<rect width="1024" height="1024" fill="#030526"/>
+<path d="M181 557C111 443 151 281 270 183C413 66 625 84 754 201C795 238 826 282 846 330" fill="none" stroke="url(#top)" stroke-width="54" stroke-linecap="round"/>
+<path d="M802 203L810 166Q815 142 835 163L884 361Q892 390 862 385L678 354Q654 350 672 329Z" fill="url(#tip1)"/>
+<path d="M842 414C914 534 871 700 750 801C610 918 397 902 268 787C227 750 196 706 176 658" fill="none" stroke="url(#bottom)" stroke-width="54" stroke-linecap="round"/>
+<path d="M222 797L213 834Q208 858 188 837L139 639Q131 610 161 615L345 646Q369 650 351 671Z" fill="url(#tip2)"/>
+<g fill="none" stroke="#fff" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"><path d="M376 501L590 386M386 511L625 616"/></g>
+<g fill="#fff"><circle cx="365" cy="500" r="64"/><circle cx="589" cy="379" r="64"/><circle cx="630" cy="621" r="64"/></g>
+</svg>
