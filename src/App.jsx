@@ -820,7 +820,7 @@ function LandingPage({ onGetStarted, onSignIn }) {
   return <main className="landing-page">
     <header className="landing-nav">
       <a className="landing-brand" href="#home"><CrossposterLogo/> FREE CROSSPOSTER</a>
-      <nav><a href="#features">Features</a><a href="#how-it-works">How it works</a><a href="/terms/">Terms</a><a href="/privacy.html">Privacy</a></nav>
+      <nav><a href="#features">Features</a><a href="#how-it-works">How it works</a><a href="/features/">Explore features</a><a href="/faq/">FAQ</a><a href="/terms/">Terms</a><a href="/privacy.html">Privacy</a></nav>
       <div className="landing-actions"><button className="landing-signin" onClick={onSignIn}>Sign in</button><button className="landing-nav-cta" onClick={onGetStarted}>Get started <span>↗</span></button></div>
     </header>
     <section className="landing-hero" id="home">
@@ -859,6 +859,6 @@ function LandingPage({ onGetStarted, onSignIn }) {
       <div className="landing-steps"><article><span>01</span><div><h3>Create your account</h3><p>Sign up securely and open your personal publishing workspace.</p></div><b>↗</b></article><article><span>02</span><div><h3>Connect your channels</h3><p>Authorize the social accounts you want to manage. You stay in control of access.</p></div><b>↗</b></article><article><span>03</span><div><h3>Create and publish</h3><p>Upload your media, write a caption, choose destinations and publish where supported.</p></div><b>↗</b></article></div>
     </section>
     <section className="landing-cta"><span className="landing-eyebrow">YOUR NEXT POST STARTS HERE</span><h2>Make consistency<br/><em>feel effortless.</em></h2><button className="landing-primary" onClick={onGetStarted}>Get started for free <span>→</span></button></section>
-    <footer className="landing-footer"><a className="landing-brand" href="#home"><CrossposterLogo/> FREE CROSSPOSTER</a><span>© 2026 FREE CROSSPOSTER</span><div><a href="/terms.html">Terms of Service</a><a href="/privacy.html">Privacy Policy</a><a href="mailto:imenaking@gmail.com">Contact</a></div></footer>
+    <footer className="landing-footer"><a className="landing-brand" href="#home"><CrossposterLogo/> FREE CROSSPOSTER</a><span>© 2026 FREE CROSSPOSTER</span><div><a href="/terms/">Terms of Service</a><a href="/privacy.html">Privacy Policy</a><a href="/faq/">FAQ</a><a href="mailto:imenaking@gmail.com">Contact</a></div></footer>
   </main>
 }
