@@ -682,7 +682,7 @@ function LandingPage({ onGetStarted, onSignIn }) {
   return <main className="landing-page">
     <header className="landing-nav">
       <a className="landing-brand" href="#home"><CrossposterLogo/> FREE CROSSPOSTER</a>
-      <nav><a href="#features">Features</a><a href="#how-it-works">How it works</a><a href="/terms.html">Terms</a><a href="/privacy.html">Privacy</a></nav>
+      <nav><a href="#features">Features</a><a href="#how-it-works">How it works</a><a href="/terms/">Terms</a><a href="/privacy.html">Privacy</a></nav>
       <div className="landing-actions"><button className="landing-signin" onClick={onSignIn}>Sign in</button><button className="landing-nav-cta" onClick={onGetStarted}>Get started <span>↗</span></button></div>
     </header>
     <section className="landing-hero" id="home">
