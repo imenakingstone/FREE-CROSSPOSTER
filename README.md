@@ -1,5 +1,7 @@
 # FREE CROSSPOSTER
 
+**Live website:** https://free-crossposter-zcpn.vercel.app/
+
 A React + Vite social publishing workspace backed by Supabase.
 
 ## Current workspace
