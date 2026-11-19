@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
-import { LayoutDashboard, CalendarDays, FileText, History, Link2, Settings, LogOut, ImagePlus, Send, ShieldCheck, Video, Trash2, Clock3, Plus, Save, X, RefreshCw, Bell, CheckCheck, Activity, MessageSquare, Search } from 'lucide-react'
+import { LayoutDashboard, CalendarDays, FileText, History, Link2, Settings, LogOut, ImagePlus, Send, ShieldCheck, Video, Trash2, Clock3, Plus, Save, X, RefreshCw, Bell, CheckCheck, Activity, MessageSquare, Search, SlidersHorizontal, Scissors, MapPin, EyeOff, MessageCircle, Crop, Sparkles, ChevronDown, Film, Check, Globe, Users, Play, RotateCcw, Camera } from 'lucide-react'
 
 function CrossposterLogo() { return <span className="brand-icon crossposter-logo" aria-label="FREE CROSSPOSTER"><img src="/crossposter.svg" alt="" /></span> }
 function PlatformLogo({ platform }) {
@@ -51,6 +51,8 @@ export default function App() {
   const [caption, setCaption] = useState('')
   const [file, setFile] = useState(null)
   const [selectedPlatforms, setSelectedPlatforms] = useState(['instagram'])
+  const [editorSettings, setEditorSettings] = useState({ filter:'original', aspect:'original', trimStart:0, trimEnd:100 })
+  const [platformSettings, setPlatformSettings] = useState({ instagram:{ hideLikeCount:false, hideComments:false, location:'', shareToFacebook:false }, tiktok:{ privacy:'PUBLIC_TO_EVERYONE', allowComments:true, allowDuet:true, allowStitch:true }, youtube:{ title:'', description:'', visibility:'public', madeForKids:false, commentsEnabled:true, showLikeCount:true, tags:'' } })
   const [schedulePostId, setSchedulePostId] = useState('')
   const [scheduleDestinationId, setScheduleDestinationId] = useState('')
   const [scheduleAt, setScheduleAt] = useState('')
@@ -327,7 +329,7 @@ export default function App() {
     }
   }
 
-  async function createDraft(event) {
+  async function createDraft(event, nextEditorSettings = editorSettings, nextPlatformSettings = platformSettings) {
     event.preventDefault()
     if (!caption.trim() && !file) return setNotice('Add a caption or choose a photo/video first.')
     if (!selectedPlatforms.length) return setNotice('Choose at least one destination.')
@@ -344,7 +346,7 @@ export default function App() {
         if (error) throw error
         mediaType = file.type.startsWith('video/') ? 'video' : 'image'
       }
-      const { data: post, error: postError } = await supabase.from('posts').insert({ user_id: session.user.id, caption: caption.trim(), media_path: mediaPath, media_type: mediaType, original_filename: file?.name || null, status: 'draft' }).select('id').single()
+      const { data: post, error: postError } = await supabase.from('posts').insert({ user_id: session.user.id, caption: caption.trim(), media_path: mediaPath, media_type: mediaType, original_filename: file?.name || null, status: 'draft', editor_settings: nextEditorSettings, platform_settings: nextPlatformSettings }).select('id').single()
       if (postError) throw postError
       const destinations = selectedPlatforms.flatMap(platform => {
         const linkedAccounts = socialAccounts.filter(item => item.platform === platform && item.account_status === 'connected')
@@ -456,7 +458,7 @@ export default function App() {
       <header className="topbar"><div><span className="topbar-kicker">YOUR WORKSPACE</span><strong>{activeTitle}</strong></div><div className="user-area"><span className="user-email">{session.user.email}</span><div className="notification-wrap"><button className="icon-btn notification-trigger" onClick={()=>setNotificationOpen(v=>!v)} title="Notifications"><Bell size={17}/>{notifications.some(n=>!n.read_at)&&<i/>}</button>{notificationOpen&&<div className="notification-panel"><div className="notification-heading"><strong>Notifications</strong><button onClick={markAllNotificationsRead}><CheckCheck size={13}/> Mark all read</button></div>{notifications.map(item=><button key={item.id} className={'notification-item '+(!item.read_at?'unread':'')} onClick={()=>markNotificationRead(item)}><strong>{item.title}</strong><span>{item.body}</span><small>{new Date(item.created_at).toLocaleString()}</small></button>)}{!notifications.length&&<p className="empty-state">No notifications yet.</p>}</div>}</div><button className="icon-btn" onClick={refreshWorkspace} title="Refresh workspace"><RefreshCw size={17}/></button></div></header>
       <div className="dashboard-content">
         {activeView === 'overview' && <Overview posts={posts} accounts={socialAccounts} schedules={schedules} logs={logs} onNavigate={setActiveView} />}
-        {activeView === 'create' && <CreatePost caption={caption} setCaption={setCaption} file={file} setFile={setFile} selectedPlatforms={selectedPlatforms} setSelectedPlatforms={setSelectedPlatforms} onSubmit={createDraft} busy={busy} onOpenChatGPT={openChatGPTForHashtags} /> }
+        {activeView === 'create' && <CreatePost caption={caption} setCaption={setCaption} file={file} setFile={setFile} selectedPlatforms={selectedPlatforms} setSelectedPlatforms={setSelectedPlatforms} editorSettings={editorSettings} setEditorSettings={setEditorSettings} platformSettings={platformSettings} setPlatformSettings={setPlatformSettings} onSubmit={createDraft} busy={busy} onOpenChatGPT={openChatGPTForHashtags} /> }
         {activeView === 'drafts' && <Drafts posts={draftPosts} destinations={postDestinations} accounts={socialAccounts} onDelete={deleteDraft} onSave={saveCaption} onPublish={publishDestination} onAssignAccount={assignDestinationAccount} publishingPostId={publishingPostId} />}
         {activeView === 'calendar' && <CalendarView posts={posts} schedules={schedules} onSchedule={schedulePost} onCancel={cancelSchedule} busy={busy} schedulePostId={schedulePostId} setSchedulePostId={setSchedulePostId} destinationId={scheduleDestinationId} setDestinationId={setScheduleDestinationId} scheduleAt={scheduleAt} setScheduleAt={setScheduleAt} destinations={destRows} />}
         {activeView === 'history' && <HistoryView logs={logs} posts={posts} />}
@@ -556,8 +558,98 @@ function Overview({posts,accounts,schedules,logs,onNavigate}) {
     </div>
   </section>
 }
-function CreatePost({caption,setCaption,file,setFile,selectedPlatforms,setSelectedPlatforms,onSubmit,busy,onOpenChatGPT}) {
-  return <><PageHeader eyebrow="CONTENT STUDIO" title="Create a post." description="Prepare your content once and choose where it should go."/><div className="card composer"><form onSubmit={onSubmit}><label>Caption<textarea rows="6" value={caption} onChange={e=>setCaption(e.target.value)} placeholder="Write your caption…"/></label><section className="chatgpt-handoff"><div><strong>Need hashtag ideas?</strong><p className="fine-print">Use your own ChatGPT account. No API key or paid integration is required; we'll copy a ready-made prompt for you.</p></div><button type="button" className="secondary-action" onClick={onOpenChatGPT} disabled={!caption.trim()}>Open ChatGPT ↗</button></section><label className="upload-zone"><input type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm" onChange={e=>setFile(e.target.files?.[0]||null)}/>{file?<><div className="upload-icon"><Video/></div><strong>{file.name}</strong><span>{(file.size/1024/1024).toFixed(1)} MB · click to replace</span></>:<><div className="upload-icon"><ImagePlus/></div><strong>Add a photo or video</strong><span>JPEG, PNG, WebP, GIF, MP4, MOV or WebM · max 50 MB</span></>}</label><div className="destination-block"><div className="destination-title"><span>Choose destinations</span><span className="muted tiny">Publishing requires an authorized account</span></div><div className="platform-list">{platforms.map(p=><button type="button" key={p.id} disabled={false} className={'platform-choice '+(selectedPlatforms.includes(p.id)?'selected':'')+''} onClick={()=>setSelectedPlatforms(current=>current.includes(p.id)?current.filter(x=>x!==p.id):[...current,p.id])}><span className={'platform-mark '+p.id}><PlatformLogo platform={p.id} /></span>{p.label}{p.id==='tiktok'&&<small>Video posts</small>}<span className="check">{selectedPlatforms.includes(p.id)?'✓':p.id==='instagram'?'+':'—'}</span></button>)}</div></div><button className="primary-btn full" disabled={busy}>{busy?'Saving…':'Save post draft'} <Send size={16}/></button></form></div></>
+function CreatePost({caption,setCaption,file,setFile,selectedPlatforms,setSelectedPlatforms,editorSettings,setEditorSettings,platformSettings,setPlatformSettings,onSubmit,busy,onOpenChatGPT}) {
+  const [activeEditor,setActiveEditor]=useState('instagram')
+  const [activeTool,setActiveTool]=useState('media')
+  const [previewUrl,setPreviewUrl]=useState('')
+  const [youtubeTitle,setYoutubeTitle]=useState(platformSettings.youtube?.title||'')
+  const [youtubeDescription,setYoutubeDescription]=useState(platformSettings.youtube?.description||'')
+  const [youtubeTags,setYoutubeTags]=useState(platformSettings.youtube?.tags||'')
+  const [location,setLocation]=useState(platformSettings.instagram?.location||'')
+  const [trimStart,setTrimStart]=useState(editorSettings.trimStart||0)
+  const [trimEnd,setTrimEnd]=useState(editorSettings.trimEnd??100)
+  const isVideo=!!file?.type?.startsWith('video/')
+  const isImage=!!file?.type?.startsWith('image/')
+  useEffect(()=>{
+    if(!file){setPreviewUrl('');return}
+    const url=URL.createObjectURL(file)
+    setPreviewUrl(url)
+    return ()=>URL.revokeObjectURL(url)
+  },[file])
+  function updateEditor(patch){setEditorSettings(current=>({...current,...patch}))}
+  function updatePlatform(platform,patch){setPlatformSettings(current=>({...current,[platform]:{...(current[platform]||{}),...patch}}))}
+  function chooseFile(next){setFile(next);setActiveTool('media')}
+  function submit(event){event.preventDefault();onSubmit(event,{...editorSettings,trimStart,trimEnd},{...platformSettings,instagram:{...platformSettings.instagram,location},youtube:{...platformSettings.youtube,title:youtubeTitle,description:youtubeDescription,tags:youtubeTags}})}
+  const filters=[
+    {id:'original',label:'Original',css:'none'},
+    {id:'vivid',label:'Vivid',css:'saturate(1.45) contrast(1.08)'},
+    {id:'warm',label:'Warm',css:'sepia(.2) saturate(1.2)'},
+    {id:'cool',label:'Cool',css:'saturate(1.1) hue-rotate(12deg)'},
+    {id:'mono',label:'Mono',css:'grayscale(1) contrast(1.08)'},
+    {id:'fade',label:'Fade',css:'brightness(1.08) saturate(.72) contrast(.9)'},
+  ]
+  const filter=filters.find(item=>item.id===editorSettings.filter)||filters[0]
+  const selected=(id)=>selectedPlatforms.includes(id)
+  return <section className="creator-studio">
+    <div className="creator-heading"><div><p className="eyebrow">CROSSPOST CREATION STUDIO</p><h1>Create once.<br/><span>Shape it for every feed.</span></h1><p>Build your post in a familiar creator workflow, then prepare each destination.</p></div><div className="creator-step-pill"><span>01</span> CREATE <i/> <span>02</span> CUSTOMIZE <i/> <span>03</span> DISTRIBUTE</div></div>
+    <div className="creator-platform-tabs" role="tablist" aria-label="Platform editor">
+      <button type="button" className={activeEditor==='instagram'?'active instagram-tab':''} onClick={()=>setActiveEditor('instagram')}><PlatformLogo platform="instagram"/> Instagram <small>Post & Reel</small></button>
+      <button type="button" className={activeEditor==='tiktok'?'active tiktok-tab':''} onClick={()=>setActiveEditor('tiktok')}><PlatformLogo platform="tiktok"/> TikTok <small>Video</small></button>
+      <button type="button" className={activeEditor==='youtube'?'active youtube-tab':''} onClick={()=>setActiveEditor('youtube')}><PlatformLogo platform="youtube"/> YouTube <small>Video details</small></button>
+    </div>
+    <form className="creator-workspace" onSubmit={submit}>
+      <div className="creator-main-column">
+        <section className="creator-card creator-media-card">
+          <div className="creator-card-head"><div><span className="creator-number">01</span><div><h2>Media & preview</h2><p>Choose your content and see how it appears in the feed.</p></div></div><span className="creator-status"><span/> LIVE PREVIEW</span></div>
+          <div className="creator-media-layout">
+            <div className="creator-preview-column">
+              <div className={'creator-phone-preview '+(activeEditor==='youtube'?'youtube-preview':'')}>
+                <div className="creator-preview-top"><CrossposterLogo/><span>{activeEditor==='youtube'?'Your channel':activeEditor==='tiktok'?'@yourhandle':'your.instagram'}</span><b>•••</b></div>
+                <div className="creator-preview-media">
+                  {previewUrl&&isImage?<img src={previewUrl} alt="Selected media preview" style={{filter:filter.css,aspectRatio:editorSettings.aspect==='square'?'1/1':editorSettings.aspect==='portrait'?'4/5':editorSettings.aspect==='landscape'?'16/9':'auto'}}/>:
+                   previewUrl&&isVideo?<video src={previewUrl} controls playsInline style={{filter:filter.css}}/>:
+                   <div className="creator-empty-media"><Camera size={30}/><strong>Your media appears here</strong><span>Upload a photo or video to start</span></div>}
+                  {file&&<span className="creator-media-kind">{isVideo?'VIDEO':'PHOTO'}</span>}
+                </div>
+                <div className="creator-preview-actions"><span>♡　♧　➤</span><span>▱</span></div>
+                <div className="creator-preview-caption"><b>your.instagram</b> {caption||'Your caption preview will appear here…'}</div>
+                {activeEditor==='instagram'&&<div className="creator-preview-subtle">Liked by people you follow</div>}
+              </div>
+              <label className="creator-upload-button"><input type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm" onChange={e=>chooseFile(e.target.files?.[0]||null)}/><ImagePlus size={16}/>{file?'Replace media':'Select photo or video'}</label>
+              {file&&<div className="creator-file-info"><span>{file.name}</span><b>{(file.size/1024/1024).toFixed(1)} MB</b><button type="button" onClick={()=>chooseFile(null)}>Remove</button></div>}
+            </div>
+            <div className="creator-edit-tools">
+              <div className="creator-tool-tabs">
+                <button type="button" className={activeTool==='media'?'active':''} onClick={()=>setActiveTool('media')}><Crop size={14}/> Format</button>
+                <button type="button" className={activeTool==='filters'?'active':''} onClick={()=>setActiveTool('filters')}><Sparkles size={14}/> Filters</button>
+                <button type="button" className={activeTool==='trim'?'active':''} onClick={()=>setActiveTool('trim')} disabled={!isVideo}><Scissors size={14}/> Trim</button>
+              </div>
+              {activeTool==='media'&&<div className="creator-tool-panel"><h3>Crop & format</h3><p>Choose a preview format for the selected destination.</p><div className="creator-format-grid">{[{id:'original',label:'Original',shape:'format-original'},{id:'square',label:'Square',shape:'format-square'},{id:'portrait',label:'4:5 Portrait',shape:'format-portrait'},{id:'landscape',label:'16:9',shape:'format-landscape'}].map(item=><button type="button" key={item.id} className={editorSettings.aspect===item.id?'selected':''} onClick={()=>updateEditor({aspect:item.id})}><i className={item.shape}/>{item.label}</button>)}</div><div className="creator-tool-note"><Crop size={15}/> Preview crop selection. Original media is kept safe in your draft.</div></div>}
+              {activeTool==='filters'&&<div className="creator-tool-panel"><h3>Creative filters</h3><p>Tap a look to preview it on your media.</p><div className="creator-filter-grid">{filters.map(item=><button type="button" key={item.id} className={editorSettings.filter===item.id?'selected':''} onClick={()=>updateEditor({filter:item.id})}><span className="creator-filter-thumb" style={{filter:item.css}}>{previewUrl&&isImage?<img src={previewUrl} alt=""/>:<Camera size={20}/>}</span><b>{item.label}</b></button>)}</div><div className="creator-tool-note"><Sparkles size={15}/> Filters currently affect the on-screen preview; processed-media export is a separate publishing-engine task.</div></div>}
+              {activeTool==='trim'&&<div className="creator-tool-panel"><h3>Video cut & trim</h3><p>Set the clip's in and out points.</p>{previewUrl&&isVideo?<video className="creator-trim-video" src={previewUrl} controls playsInline/>:<div className="creator-trim-empty"><Film size={23}/> Select a video to trim</div>}<label>Start point <b>{trimStart}%</b><input type="range" min="0" max={Math.max(0,trimEnd-1)} value={trimStart} onChange={e=>{const v=Number(e.target.value);setTrimStart(v);updateEditor({trimStart:v})}}/></label><label>End point <b>{trimEnd}%</b><input type="range" min={Math.min(100,trimStart+1)} max="100" value={trimEnd} onChange={e=>{const v=Number(e.target.value);setTrimEnd(v);updateEditor({trimEnd:v})}}/></label><div className="creator-tool-note"><Scissors size={15}/> Trim points are saved with the draft as edit instructions. Video rendering/export is not connected yet.</div></div>}
+            </div>
+          </div>
+        </section>
+        <section className="creator-card">
+          <div className="creator-card-head"><div><span className="creator-number">02</span><div><h2>{activeEditor==='youtube'?'Video details': 'Caption & description'}</h2><p>{activeEditor==='youtube'?'Prepare the metadata for a YouTube upload.':'Write once, then customize the caption for each platform.'}</p></div></div></div>
+          {activeEditor==='youtube'?<div className="creator-form-fields"><label>Video title<input maxLength="100" value={youtubeTitle} onChange={e=>setYoutubeTitle(e.target.value)} placeholder="Add a title for your video"/></label><label>Description<textarea rows="5" value={youtubeDescription} onChange={e=>setYoutubeDescription(e.target.value)} placeholder="Tell viewers what your video is about…"/></label><label>Tags<input value={youtubeTags} onChange={e=>setYoutubeTags(e.target.value)} placeholder="Add tags separated by commas"/></label><div className="creator-character-count">{youtubeTitle.length}/100 title characters</div></div>:<><textarea className="creator-caption-input" rows="5" value={caption} onChange={e=>setCaption(e.target.value)} placeholder={activeEditor==='tiktok'?'Write a caption for your TikTok…':'Write a caption for your Instagram post…'}/><div className="creator-caption-footer"><span>{caption.length} characters</span><button type="button" className="creator-hashtag-button" onClick={onOpenChatGPT} disabled={!caption.trim()}><Sparkles size={14}/> Get hashtag ideas</button></div></>}
+        </section>
+        {activeEditor==='instagram'&&<section className="creator-card"><div className="creator-card-head"><div><span className="creator-number">03</span><div><h2>Instagram post settings</h2><p>Fine-tune how your post is presented.</p></div></div></div><div className="creator-settings-grid"><label className="creator-setting-row"><span><EyeOff size={16}/><b>Hide like count</b><small>Hide public like counts where the platform supports it.</small></span><input type="checkbox" checked={!!platformSettings.instagram?.hideLikeCount} onChange={e=>updatePlatform('instagram',{hideLikeCount:e.target.checked})}/></label><label className="creator-setting-row"><span><MessageCircle size={16}/><b>Turn off comments</b><small>Save your preference for this post.</small></span><input type="checkbox" checked={!!platformSettings.instagram?.hideComments} onChange={e=>updatePlatform('instagram',{hideComments:e.target.checked})}/></label><label className="creator-setting-row full-setting"><span><MapPin size={16}/><b>Add location</b><small>Attach a location label to your post.</small></span><input value={location} onChange={e=>setLocation(e.target.value)} placeholder="Search a place or city…"/></label><label className="creator-setting-row"><span><Users size={16}/><b>Also share to Facebook</b><small>Meta Page connection is not available yet.</small></span><input type="checkbox" checked={!!platformSettings.instagram?.shareToFacebook} onChange={e=>updatePlatform('instagram',{shareToFacebook:e.target.checked})}/></label></div></section>}
+        {activeEditor==='tiktok'&&<section className="creator-card"><div className="creator-card-head"><div><span className="creator-number">03</span><div><h2>TikTok publishing settings</h2><p>Set your preferences before preparing a TikTok draft.</p></div></div></div><div className="creator-settings-grid"><label className="creator-setting-row full-setting"><span><Globe size={16}/><b>Who can watch</b></span><select value={platformSettings.tiktok?.privacy||'PUBLIC_TO_EVERYONE'} onChange={e=>updatePlatform('tiktok',{privacy:e.target.value})}><option value="PUBLIC_TO_EVERYONE">Everyone</option><option value="MUTUAL_FOLLOW_FRIENDS">Friends</option><option value="SELF_ONLY">Only me</option></select></label>{[['allowComments','Allow comments'],['allowDuet','Allow Duet'],['allowStitch','Allow Stitch']].map(([key,label])=><label className="creator-setting-row" key={key}><span><MessageCircle size={16}/><b>{label}</b></span><input type="checkbox" checked={platformSettings.tiktok?.[key]!==false} onChange={e=>updatePlatform('tiktok',{[key]:e.target.checked})}/></label>)}</div></section>}
+        {activeEditor==='youtube'&&<section className="creator-card"><div className="creator-card-head"><div><span className="creator-number">03</span><div><h2>YouTube upload settings</h2><p>Familiar video publishing controls, ready for the channel integration.</p></div></div><span className="creator-coming-soon">CHANNEL CONNECTION IN PROGRESS</span></div><div className="creator-settings-grid"><label className="creator-setting-row full-setting"><span><Globe size={16}/><b>Visibility</b><small>Who can watch this video.</small></span><select value={platformSettings.youtube?.visibility||'public'} onChange={e=>updatePlatform('youtube',{visibility:e.target.value})}><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select></label><label className="creator-setting-row"><span><Users size={16}/><b>Made for kids</b><small>Audience declaration.</small></span><input type="checkbox" checked={!!platformSettings.youtube?.madeForKids} onChange={e=>updatePlatform('youtube',{madeForKids:e.target.checked})}/></label><label className="creator-setting-row"><span><MessageCircle size={16}/><b>Allow comments</b></span><input type="checkbox" checked={platformSettings.youtube?.commentsEnabled!==false} onChange={e=>updatePlatform('youtube',{commentsEnabled:e.target.checked})}/></label><label className="creator-setting-row"><span><EyeOff size={16}/><b>Show like count</b></span><input type="checkbox" checked={platformSettings.youtube?.showLikeCount!==false} onChange={e=>updatePlatform('youtube',{showLikeCount:e.target.checked})}/></label></div></section>}
+      </div>
+      <aside className="creator-side-column">
+        <section className="creator-card creator-destination-card"><div className="creator-card-head"><div><span className="creator-number">04</span><div><h2>Distribution</h2><p>Choose where this post should go.</p></div></div></div>
+          <div className="creator-destination-option"><span className="creator-destination-icon instagram"><PlatformLogo platform="instagram"/></span><span><b>Instagram</b><small>{selected('instagram')?'Selected for publishing':'Not selected'}</small></span><input type="checkbox" checked={selected('instagram')} onChange={e=>setSelectedPlatforms(v=>e.target.checked?[...v,'instagram']:v.filter(x=>x!=='instagram'))}/></div>
+          <div className="creator-destination-option"><span className="creator-destination-icon tiktok"><PlatformLogo platform="tiktok"/></span><span><b>TikTok</b><small>{selected('tiktok')?'Selected · video only':'Video destination'}</small></span><input type="checkbox" checked={selected('tiktok')} onChange={e=>setSelectedPlatforms(v=>e.target.checked?[...v,'tiktok']:v.filter(x=>x!=='tiktok'))}/></div>
+          <div className="creator-destination-option is-unavailable"><span className="creator-destination-icon youtube"><PlatformLogo platform="youtube"/></span><span><b>YouTube</b><small>Editor ready · channel integration pending</small></span><span className="creator-lock">SOON</span></div>
+          <div className="creator-destination-option is-unavailable"><span className="creator-destination-icon facebook"><span>f</span></span><span><b>Facebook</b><small>Meta Page connection required</small></span><span className="creator-lock">SOON</span></div>
+          <div className="creator-destination-note">Your media is uploaded privately to your workspace. Each connected destination is tracked separately.</div>
+        </section>
+        <section className="creator-card creator-save-card"><span className="creator-save-icon"><CrossposterLogo/></span><h3>Ready to route your post?</h3><p>Save the source post and its platform-specific settings as a draft. Publish when the destination is connected and supported.</p><button className="creator-save-button" disabled={busy}>{busy?'Saving draft…':'Save as draft'} <Send size={15}/></button><span className="creator-save-foot"><ShieldCheck size={13}/> Your draft stays private</span></section>
+      </aside>
+    </form>
+  </section>
 }
 function Drafts({posts,destinations,accounts,onDelete,onSave,onPublish,onAssignAccount,publishingPostId}) {
   const [edits,setEdits]=useState({})
