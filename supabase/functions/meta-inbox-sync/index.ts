@@ -39,7 +39,7 @@ Deno.serve(async (req: Request) => {
     if (userError || !user) return reply({ error: "Your session expired. Sign in again." }, 401);
     const admin = createClient(url, service, { auth: { persistSession: false, autoRefreshToken: false } });
     const { data: accounts, error: accountError } = await admin.from("social_accounts")
-      .select("id,user_id,platform_user_id,access_token_encrypted,scopes,account_status,environment")
+      .select("id,user_id,platform_user_id,access_token_encrypted,scopes,account_status,environment,profile_picture_url")
       .eq("user_id", user.id).eq("platform", "instagram").eq("account_status", "connected").eq("environment", "production");
     if (accountError) throw accountError;
     const eligible = (accounts || []).filter((a: any) => Array.isArray(a.scopes) && a.scopes.includes("instagram_manage_messages") && a.access_token_encrypted);
@@ -49,6 +49,23 @@ Deno.serve(async (req: Request) => {
     for (const account of eligible) {
       try {
         const token = await decryptToken(account.access_token_encrypted);
+        if (!account.profile_picture_url) {
+          try {
+            const ownProfileUrl = new URL("https://graph.facebook.com/" + API_VERSION + "/" + encodeURIComponent(account.platform_user_id));
+            ownProfileUrl.searchParams.set("fields", "id,username,profile_picture_url");
+            ownProfileUrl.searchParams.set("access_token", token);
+            const ownProfileResponse = await fetch(ownProfileUrl, { signal: AbortSignal.timeout(10000) });
+            const ownProfile = await ownProfileResponse.json().catch(() => ({}));
+            if (ownProfileResponse.ok && typeof ownProfile?.profile_picture_url === "string" && ownProfile.profile_picture_url.startsWith("https://")) {
+              await admin.from("social_accounts").update({ profile_picture_url: ownProfile.profile_picture_url })
+                .eq("id", account.id).eq("user_id", user.id);
+            } else if (!ownProfileResponse.ok) {
+              console.info("Connected Instagram profile photo unavailable", { status: ownProfileResponse.status, code: ownProfile?.error?.code });
+            }
+          } catch (profileError) {
+            console.info("Connected Instagram profile photo lookup skipped", profileError instanceof Error ? profileError.message : "unknown error");
+          }
+        }
         // Keep the conversations request lightweight. Meta can reject nested message
         // expansions with error code 1 when too much data is requested in one call.
         const query = new URL("https://graph.facebook.com/" + API_VERSION + "/" + encodeURIComponent(account.platform_user_id) + "/conversations");
@@ -80,8 +97,10 @@ Deno.serve(async (req: Request) => {
               const profileData = await profileResponse.json().catch(() => ({}));
               if (profileResponse.ok && typeof profileData?.profile_pic === "string" && profileData.profile_pic.startsWith("https://")) {
                 participantProfilePictureUrl = profileData.profile_pic;
-                await admin.from("inbox_conversations").update({ participant_profile_picture_url: participantProfilePictureUrl })
-                  .eq("id", existing.id).eq("user_id", user.id);
+                if (existing?.id) {
+                  await admin.from("inbox_conversations").update({ participant_profile_picture_url: participantProfilePictureUrl })
+                    .eq("id", existing.id).eq("user_id", user.id);
+                }
               } else if (!profileResponse.ok) {
                 console.info("Instagram participant profile photo unavailable", { status: profileResponse.status, code: profileData?.error?.code });
               }
