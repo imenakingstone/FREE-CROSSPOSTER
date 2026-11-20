@@ -132,6 +132,9 @@ export default function App() {
     if (!session?.user?.id || activeView !== 'inbox') return
     let alive = true
     const initialSync = async () => {
+      // Show cached conversations immediately; synchronize with Meta in the background.
+      await loadInboxConversations()
+      if (!alive) return
       setInboxLoading(true)
       try {
         const { data, error } = await supabase.functions.invoke('meta-inbox-sync', { body: {} })
@@ -151,7 +154,7 @@ export default function App() {
     initialSync()
     const poll = window.setInterval(() => {
       if (document.visibilityState === 'visible') loadInboxConversations()
-    }, 12000)
+    }, 20000)
     const channel = supabase.channel('inbox-live-' + session.user.id)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inbox_messages', filter: 'user_id=eq.' + session.user.id }, () => loadInboxConversations())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inbox_conversations', filter: 'user_id=eq.' + session.user.id }, () => loadInboxConversations())
@@ -167,7 +170,7 @@ export default function App() {
     refreshMessages()
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') refreshMessages()
-    }, 12000)
+    }, 20000)
     return () => { window.clearInterval(timer) }
   }, [activeConversationId, activeView])
 
@@ -212,6 +215,20 @@ export default function App() {
     if (data?.errors?.length) throw new Error(data.errors[0])
     return data
   }
+  async function refreshInstagramInbox() {
+    if (inboxLoading) return
+    setInboxLoading(true)
+    try {
+      const data = await syncInstagramInbox()
+      await loadInboxConversations()
+      setInboxLastSynced(new Date())
+      if (data?.errors?.length) setNotice(data.errors[0])
+      else setNotice('Inbox refreshed.')
+    } catch (error) {
+      setNotice(error.message || 'Inbox refresh failed. Saved conversations remain available.')
+      await loadInboxConversations()
+    } finally { setInboxLoading(false) }
+  }
   async function diagnoseInstagramInbox() {
     setInboxDiagnosticLoading(true)
     setInboxDiagnostic({ status: 'running', started_at: new Date().toISOString(), note: 'Checking the saved Instagram connection and Meta Graph API. No access tokens are displayed.' })
@@ -242,7 +259,7 @@ export default function App() {
     if (!session?.user?.id) return
     const { data, error } = await supabase.from('inbox_conversations')
       .select('id,platform,social_account_id,participant_id,participant_name,participant_username,last_message_text,last_message_at,last_inbound_at,unread_count,status')
-      .eq('user_id', session.user.id).eq('platform', 'instagram').order('last_message_at', { ascending: false }).limit(100)
+      .eq('user_id', session.user.id).eq('platform', 'instagram').order('last_message_at', { ascending: false }).limit(20)
     if (error) { setNotice(error.message); return }
     setInboxConversations(data || [])
     if (!activeConversationId && data?.length) setActiveConversationId(data[0].id)
@@ -983,6 +1000,26 @@ function Accounts({accounts,onConnect,onConnectTikTok,onDisconnect,busy}) {
     </div>
   </>
 }
+function renderInboxText(value) {
+  const parts = String(value || '').split(/(https?:\\/\\/[^\\s]+)/g)
+  return parts.map((part, index) => {
+    if (!/^https?:\\/\\//i.test(part)) return part
+    const href = part.replace(/[),.!?]+$/, '')
+    const suffix = part.slice(href.length)
+    return <span key={index}><a href={href} target="_blank" rel="noopener noreferrer">{href}</a>{suffix}</span>
+  })
+}
+function InboxAttachment({ attachment }) {
+  const url = attachment?.image_data?.url || attachment?.video_data?.url ||
+    attachment?.file_url || attachment?.url || attachment?.payload?.url || ''
+  if (!url || !/^https?:\\/\\//i.test(url)) {
+    return <small className="inbox-attachment-note">Attachment shared · preview unavailable</small>
+  }
+  const type = String(attachment?.type || attachment?.mime_type || '').toLowerCase()
+  const isImage = type.includes('image') || /\\.(png|jpe?g|gif|webp)(\\?|$)/i.test(url)
+  if (isImage) return <a href={url} target="_blank" rel="noopener noreferrer"><img className="inbox-inline-image" src={url} alt="Instagram message attachment" loading="lazy" referrerPolicy="no-referrer"/></a>
+  return <a className="inbox-attachment-link" href={url} target="_blank" rel="noopener noreferrer">Open {type.includes('video') ? 'video' : 'attachment'} ↗</a>
+}
 function InboxView({conversations,messages,activeId,onSelect,draft,setDraft,onSend,loading,sending,accounts,onRefresh,onDiagnose,diagnostic,diagnosticLoading,isAdmin,lastSynced}) {
   const [search,setSearch] = useState('')
   const streamRef = useRef(null)
@@ -1037,8 +1074,9 @@ function InboxView({conversations,messages,activeId,onSelect,draft,setDraft,onSe
             <div className="inbox-chat-intro"><span className="inbox-avatar instagram">{initials(active.participant_username||active.participant_name)}</span><strong>{active.participant_username?'@'+active.participant_username:active.participant_name||'Instagram user'}</strong><small>Instagram Direct</small></div>
             {messages.map(message=><div className={'inbox-bubble-row '+(message.direction==='outbound'?'outbound':'inbound')} key={message.id}>
               {message.direction!=='outbound'&&<span className="inbox-message-avatar">{initials(active.participant_username||active.participant_name)}</span>}
-              <div className="inbox-bubble"><p>{message.message_text|| (message.attachments?.length?'Attachment':'Unsupported message')}</p>
-                {message.attachments?.length>0&&<small className="inbox-attachment-note">{message.attachments.length} attachment{message.attachments.length===1?'':'s'} · preview unavailable</small>}
+              <div className="inbox-bubble">{message.message_text&&<p>{renderInboxText(message.message_text)}</p>}
+                {message.attachments?.map((attachment,index)=><InboxAttachment key={attachment.id||index} attachment={attachment}/>)}
+                {!message.message_text&&!message.attachments?.length&&<p>Unsupported message</p>}
                 <time>{formatTime(message.sent_at)}{message.direction==='outbound'&&message.delivery_status==='sent'?' · Sent':''}</time>
               </div>
             </div>)}
