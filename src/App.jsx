@@ -23,6 +23,7 @@ function getAuthRedirectUrl() {
 }
 
 const workspaceViews = new Set(['overview','create','calendar','history','inbox','accounts','settings','system-health'])
+function isAuthPath(pathname) { return pathname === '/login' || pathname === '/signup' }
 function viewFromPath(pathname) {
   const match = pathname.match(/^\/app(?:\/([^/]+))?\/?$/)
   const candidate = match?.[1] || 'overview'
@@ -43,8 +44,8 @@ const navItems = [
 export default function App() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [mode, setMode] = useState('login')
-  const [showAuth, setShowAuth] = useState(() => window.location.pathname.startsWith('/app/'))
+  const [mode, setMode] = useState(() => window.location.pathname === '/signup' ? 'signup' : 'login')
+  const [showAuth, setShowAuth] = useState(() => window.location.pathname.startsWith('/app/') || isAuthPath(window.location.pathname))
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -109,6 +110,10 @@ export default function App() {
     const handleAuthHistoryBack = () => {
       if (window.location.pathname.startsWith('/app/')) {
         setActiveView(viewFromPath(window.location.pathname))
+        setShowAuth(true)
+        setMode('login')
+      } else if (isAuthPath(window.location.pathname)) {
+        setMode(window.location.pathname === '/signup' ? 'signup' : 'login')
         setShowAuth(true)
       } else { setShowAuth(false); setMode('login'); setActiveView('overview') }
     }
@@ -430,11 +435,12 @@ export default function App() {
   }
   function openAuth(nextMode) {
     setMode(nextMode); setNotice(''); setShowAuth(true)
-    window.history.pushState({ authView: true }, '', `${window.location.pathname}#${nextMode}`)
+    const nextPath = nextMode === 'signup' ? '/signup' : '/login'
+    if (window.location.pathname !== nextPath) window.history.pushState({ authView: true }, '', nextPath)
   }
   function closeAuth() {
     setShowAuth(false); setMode('login'); setNotice('')
-    if (window.location.pathname.startsWith('/app/')) window.history.replaceState({}, '', '/')
+    if (window.location.pathname.startsWith('/app/') || isAuthPath(window.location.pathname)) window.history.replaceState({}, '', '/')
     else if (window.history.state?.authView) window.history.back()
   }
   async function handleSignOut() {
