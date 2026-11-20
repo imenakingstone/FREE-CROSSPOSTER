@@ -7,7 +7,7 @@ function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 }
 function page(title: string, message: string, ok = false) {
-  return new Response(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>body{font:16px system-ui;background:#0b1020;color:#f4f6fb;display:grid;place-items:center;min-height:100vh;margin:0;padding:24px}.card{max-width:540px;background:#151d31;border:1px solid #293653;border-radius:18px;padding:30px}h1{font-size:24px}.muted{color:#b8c3d8;line-height:1.6}.mark{color:${ok ? "#55d6a1" : "#ffb86b"}}</style></head><body><main class="card"><div class="mark">FREE CROSSPOSTER</div><h1>${escapeHtml(title)}</h1><p class="muted">${escapeHtml(message)}</p><p class="muted">You can close this tab and return to FREE CROSSPOSTER.</p></main></body></html>`, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+  return new Response(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>body{font:16px system-ui;background:#0b1020;color:#f4f6fb;display:grid;place-items:center;min-height:100vh;margin:0;padding:24px}.card{max-width:540px;background:#151d31;border:1px solid #293653;border-radius:18px;padding:30px}h1{font-size:24px}.muted{color:#b8c3d8;line-height:1.6}.mark{color:${ok ? "#55d6a1" : "#ffb86b"}}</style></head><body><main class="card"><div class="mark">FREE CROSSPOSTER</div><h1>${escapeHtml(title)}</h1><p class="muted">${escapeHtml(message)}</p><p class="muted">You can close this tab and return to FREE CROSSPOSTER.</p></main></body></html>`, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
 }
 function decodeBase64(value: string): Uint8Array {
   const binary = atob(value);
@@ -45,7 +45,7 @@ Deno.serve(async (req: Request) => {
       return page("Server setup still needed", "The Meta App Secret or token-encryption key is missing from Supabase Edge Function secrets.");
     }
 
-    const admin = createClient(supabaseUrl, serviceKey);
+    const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const { data: state, error: stateError } = await admin.from("meta_oauth_states")
       .select("nonce,user_id,created_at,consumed_at,return_url")
       .eq("nonce", nonce).is("consumed_at", null)
@@ -74,11 +74,23 @@ Deno.serve(async (req: Request) => {
     }
 
     const accessToken = tokenData.access_token as string;
-    // Save only the permissions Meta actually granted to this user.
+    // Verify that the returned token belongs to this Meta app before storing it.
+    const appAccessToken = `${APP_ID}|${appSecret}`;
+    const debugUrl = new URL(`https://graph.facebook.com/${API_VERSION}/debug_token`);
+    debugUrl.searchParams.set("input_token", accessToken);
+    debugUrl.searchParams.set("access_token", appAccessToken);
+    const debugResponse = await fetch(debugUrl, { signal: AbortSignal.timeout(15000) });
+    const debugPayload = await debugResponse.json().catch(() => ({}));
+    const debug = debugPayload?.data;
+    if (!debugResponse.ok || debug?.is_valid !== true || String(debug?.app_id || "") !== APP_ID) {
+      console.error("Meta access-token validation failed", { status: debugResponse.status, code: debugPayload?.error?.code, isValid: debug?.is_valid, appMatches: String(debug?.app_id || "") === APP_ID });
+      return page("Meta could not verify this connection", "The access token was not valid for the FREE CROSSPOSTER app. Please start the Instagram connection again.");
+    }
+
     const permissionsUrl = new URL(`https://graph.facebook.com/${API_VERSION}/me/permissions`);
     permissionsUrl.searchParams.set("access_token", accessToken);
     const permissionsResponse = await fetch(permissionsUrl, { signal: AbortSignal.timeout(15000) });
-    const permissionsData = await permissionsResponse.json();
+    const permissionsData = await permissionsResponse.json().catch(() => ({}));
     if (!permissionsResponse.ok) {
       console.error("Meta granted-permissions lookup failed", { status: permissionsResponse.status, code: permissionsData?.error?.code });
       return page("Could not verify Instagram permissions", "Meta did not allow FREE CROSSPOSTER to verify the permissions granted to this connection. Please try again.");
@@ -87,9 +99,10 @@ Deno.serve(async (req: Request) => {
       ? permissionsData.data.filter((item: any) => item?.status === "granted" && typeof item?.permission === "string").map((item: any) => item.permission)
       : [];
     const accountUrl = new URL(`https://graph.facebook.com/${API_VERSION}/me/assigned_instagram_accounts`);
+    accountUrl.searchParams.set("fields", "id,username");
     accountUrl.searchParams.set("access_token", accessToken);
     const accountResponse = await fetch(accountUrl, { signal: AbortSignal.timeout(20000) });
-    const accountData = await accountResponse.json();
+    const accountData = await accountResponse.json().catch(() => ({}));
     if (!accountResponse.ok) {
       console.error("Meta Instagram asset discovery failed", { status: accountResponse.status, error: accountData?.error?.code, type: accountData?.error?.type, message: accountData?.error?.message });
       return page("Instagram account access could not be confirmed", "Meta approved the login, but did not return the Instagram account assets. Check that the Instagram account was selected and shared in the authorization window, and that the configuration grants the required asset permissions.");
@@ -97,14 +110,17 @@ Deno.serve(async (req: Request) => {
 
     const accounts = Array.isArray(accountData?.data) ? accountData.data.filter((item: any) => item?.id) : [];
     if (accounts.length === 0) {
-      console.error("Meta returned no assigned Instagram accounts for the authorized system user.");
+      console.error("Meta returned no assigned Instagram accounts for the authorized identity.");
       return page("No Instagram account was shared", "Login succeeded, but Meta returned no Instagram accounts for this authorization. Reconnect and make sure you select the professional Instagram account in the business-asset selection step.");
     }
 
     const encryptedToken = await encryptToken(accessToken, encryptionKey);
     const expiresAt = Number(tokenData.expires_in) > 0
       ? new Date(Date.now() + Number(tokenData.expires_in) * 1000).toISOString()
-      : null;
+      : Number(debug?.expires_at) > 0 ? new Date(Number(debug.expires_at) * 1000).toISOString() : null;
+    const tokenType = ["USER", "SYSTEM_USER", "PAGE", "INSTAGRAM_USER"].includes(String(debug?.type || "").toUpperCase())
+      ? String(debug.type).toUpperCase()
+      : "UNKNOWN";
     const now = new Date().toISOString();
     const saved: string[] = [];
 
@@ -113,13 +129,13 @@ Deno.serve(async (req: Request) => {
       let username = typeof account.username === "string" ? account.username : null;
       if (!username) {
         try {
-          const profileUrl = new URL(`https://graph.facebook.com/${API_VERSION}/${accountId}`);
+          const profileUrl = new URL(`https://graph.facebook.com/${API_VERSION}/${encodeURIComponent(accountId)}`);
           profileUrl.searchParams.set("fields", "id,username");
           profileUrl.searchParams.set("access_token", accessToken);
           const profileResponse = await fetch(profileUrl, { signal: AbortSignal.timeout(15000) });
-          const profileData = await profileResponse.json();
+          const profileData = await profileResponse.json().catch(() => ({}));
           if (profileResponse.ok && typeof profileData?.username === "string") username = profileData.username;
-        } catch { /* Username is optional; the account ID is sufficient to publish. */ }
+        } catch { /* Username is optional; account ID is sufficient for API calls. */ }
       }
       const payload = {
         user_id: consumed.user_id,
@@ -133,6 +149,17 @@ Deno.serve(async (req: Request) => {
         scopes: grantedScopes,
         environment: "production",
         account_status: "connected",
+        auth_method: "meta_unified_login",
+        token_type: tokenType,
+        provider_business_id: null,
+        provider_metadata: {
+          api_host: "graph.facebook.com",
+          api_version: API_VERSION,
+          token_expires_at: expiresAt,
+          data_access_expires_at: Number(debug?.data_access_expires_at) > 0 ? new Date(Number(debug.data_access_expires_at) * 1000).toISOString() : null,
+          granted_scopes: grantedScopes,
+          granular_scope_count: Array.isArray(debug?.granular_scopes) ? debug.granular_scopes.length : 0
+        },
         connected_at: now,
         updated_at: now,
       };
