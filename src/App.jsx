@@ -209,6 +209,18 @@ export default function App() {
     if (data?.errors?.length) throw new Error(data.errors[0])
     return data
   }
+  async function diagnoseInstagramInbox() {
+    const { data, error } = await supabase.functions.invoke('meta-inbox-diagnostic', { body: {} })
+    if (error) {
+      let details = null
+      try { details = await error.context?.json() } catch {}
+      throw new Error(details?.error || data?.error || error.message || 'Instagram diagnostic failed.')
+    }
+    if (data?.error) throw new Error(data.error)
+    const checks = data?.checks || {}
+    const summarize = (name, item) => name + ': ' + (item?.ok ? 'OK' : 'HTTP ' + (item?.http_status || 'network') + (item?.error?.code ? ' · Meta ' + item.error.code : '') + (item?.error?.message ? ' · ' + item.error.message : ''))
+    setNotice('Instagram connection diagnostic — ' + [summarize('Profile', checks.instagram_profile), summarize('Assigned IG assets', checks.assigned_instagram_accounts), summarize('Facebook Pages', checks.pages), summarize('Conversations API', checks.conversations), summarize('Webhook subscription', checks.subscribed_apps)].join(' | '))
+  }
   async function loadInboxConversations() {
     if (!session?.user?.id) return
     const { data, error } = await supabase.from('inbox_conversations')
@@ -532,7 +544,7 @@ export default function App() {
         {activeView === 'drafts' && <Drafts posts={draftPosts} destinations={postDestinations} accounts={socialAccounts} onDelete={deleteDraft} onSave={saveCaption} onPublish={publishDestination} onAssignAccount={assignDestinationAccount} publishingPostId={publishingPostId} />}
         {activeView === 'calendar' && <CalendarView posts={posts} schedules={schedules} onSchedule={schedulePost} onCancel={cancelSchedule} busy={busy} schedulePostId={schedulePostId} setSchedulePostId={setSchedulePostId} destinationId={scheduleDestinationId} setDestinationId={setScheduleDestinationId} scheduleAt={scheduleAt} setScheduleAt={setScheduleAt} destinations={destRows} />}
         {activeView === 'history' && <HistoryView logs={logs} posts={posts} />}
-        {activeView === 'inbox' && <InboxView conversations={inboxConversations} messages={inboxMessages} activeId={activeConversationId} onSelect={selectInboxConversation} draft={inboxDraft} setDraft={setInboxDraft} onSend={sendInboxMessage} loading={inboxLoading} sending={inboxSending} accounts={socialAccounts} onRefresh={async()=>{setInboxLoading(true);try{await syncInstagramInbox();await loadInboxConversations();if(activeConversationId)await loadInboxMessages(activeConversationId);setInboxLastSynced(new Date())}catch(error){setNotice(error.message||'Instagram inbox sync failed.')}finally{setInboxLoading(false)}}} lastSynced={inboxLastSynced} />}
+        {activeView === 'inbox' && <InboxView conversations={inboxConversations} messages={inboxMessages} activeId={activeConversationId} onSelect={selectInboxConversation} draft={inboxDraft} setDraft={setInboxDraft} onSend={sendInboxMessage} loading={inboxLoading} sending={inboxSending} accounts={socialAccounts} onRefresh={async()=>{setInboxLoading(true);try{await syncInstagramInbox();await loadInboxConversations();if(activeConversationId)await loadInboxMessages(activeConversationId);setInboxLastSynced(new Date())}catch(error){setNotice(error.message||'Instagram inbox sync failed.')}finally{setInboxLoading(false)}}} onDiagnose={diagnoseInstagramInbox} lastSynced={inboxLastSynced} />}
         {activeView === 'accounts' && <Accounts accounts={socialAccounts} onConnect={connectInstagram} onConnectTikTok={() => connectPlatform('tiktok')} onDisconnect={disconnectAccount} busy={busy} />}
         {activeView === 'settings' && <SettingsView profile={profile} setProfile={setProfile} settings={settings} setSettings={setSettings} onProfileSave={saveProfile} onSettingsSave={saveSettings} onPasswordReset={sendPasswordReset} busy={busy} email={session.user.email} />}
         {activeView === 'system-health' && session.user.email?.toLowerCase() === 'imenaking12@gmail.com' && <SystemHealthView report={healthReport} loading={healthLoading} onScan={runSystemHealth} metrics={adminMetrics} metricsLoading={adminMetricsLoading} />}
@@ -926,7 +938,7 @@ function Accounts({accounts,onConnect,onConnectTikTok,onDisconnect,busy}) {
     </article>
   </div></>
 }
-function InboxView({conversations,messages,activeId,onSelect,draft,setDraft,onSend,loading,sending,accounts,onRefresh,lastSynced}) {
+function InboxView({conversations,messages,activeId,onSelect,draft,setDraft,onSend,loading,sending,accounts,onRefresh,onDiagnose,lastSynced}) {
   const active=conversations.find(item=>item.id===activeId)
   const connected=accounts.some(item=>item.platform==='instagram'&&item.account_status==='connected')
   const webhookUrl='https://apggccljgfodaxdpxptc.supabase.co/functions/v1/meta-messaging-webhook'
@@ -957,6 +969,7 @@ function InboxView({conversations,messages,activeId,onSelect,draft,setDraft,onSe
         </> : <div className="inbox-empty-chat"><MessageSquare size={30}/><h3>Your conversations live here.</h3><p>Connect an Instagram professional account, then refresh to import existing conversations.</p></div>}
       </section>
     </div>
+    {<div className="inbox-diagnostic-action"><button type="button" className="secondary-action" onClick={onDiagnose}>Run admin connection diagnostic</button></div>}
     <details className="card inbox-webhook-guide"><summary>Developer setup · connect Meta webhooks</summary><p className="muted small">Add this HTTPS callback URL to the Webhooks product in your Meta app. Set the verification token as the Supabase Edge Function secret META_WEBHOOK_VERIFY_TOKEN. Your existing META_APP_SECRET is used to validate webhook signatures.</p><code className="webhook-url">{webhookUrl}</code><p className="muted small">Subscribe the Instagram object to the <code>messages</code> event. Meta App Review must approve messaging permissions before ordinary customers' conversations are available. Keep the standard reply window in mind.</p></details>
   </section>
 }
