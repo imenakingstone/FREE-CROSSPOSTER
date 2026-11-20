@@ -18,11 +18,14 @@ async function decryptToken(value: string) {
   return new TextDecoder().decode(plain);
 }
 function providerError(payload: any) {
-  const code = Number(payload?.error?.code);
-  if (code === 10 || code === 200) return "Meta has not granted this account the required Instagram messaging permissions. Check App Review and reconnect the account.";
-  if (code === 190) return "The Instagram connection has expired. Reconnect the account.";
-  if (code === 4 || code === 17 || code === 613 || code === 80006) return "Meta is temporarily rate-limiting inbox sync. Try again shortly; new messages should arrive through webhooks.";
-  return "Meta could not return conversations for this Instagram account. Check its messaging permissions and linked professional account.";
+  const error = payload?.error || {};
+  const code = Number(error.code);
+  const subcode = error.error_subcode ? Number(error.error_subcode) : null;
+  const message = typeof error.message === "string" ? error.message.slice(0, 260) : "No additional details were returned by Meta.";
+  if (code === 10 || code === 200) return `Meta denied access to the conversations endpoint (code ${code}${subcode ? ", subcode " + subcode : ""}). The connected System User token may have Instagram messaging access but this endpoint can require a Page access token with the linked Page's MESSAGING task and Page permissions. Meta says: ${message}`;
+  if (code === 190) return "Meta rejected the saved token as expired or invalid (code 190). Reconnect the Instagram account.";
+  if (code === 4 || code === 17 || code === 613 || code === 80006) return "Meta is rate-limiting inbox sync. Wait before retrying. Meta says: " + message;
+  return `Meta conversations request failed (HTTP/API code ${code || "unknown"}${subcode ? ", subcode " + subcode : ""}). Meta says: ${message}`;
 }
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -52,7 +55,7 @@ Deno.serve(async (req: Request) => {
         query.searchParams.set("fields", "id,updated_time,participants,messages.limit(20){id,created_time,from,to,message,attachments}");
         const response = await fetch(query, { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(20000) });
         const payload = await response.json().catch(() => ({}));
-        if (!response.ok) { errors.push(providerError(payload)); continue; }
+        if (!response.ok) { console.warn("Meta conversations request rejected", { status: response.status, code: payload?.error?.code, subcode: payload?.error?.error_subcode, type: payload?.error?.type, message: String(payload?.error?.message || "").slice(0, 260) }); errors.push(providerError(payload)); continue; }
         for (const thread of (Array.isArray(payload?.data) ? payload.data : [])) {
           const participants = Array.isArray(thread?.participants?.data) ? thread.participants.data : [];
           const other = participants.find((p: any) => String(p?.id || "") !== String(account.platform_user_id));
