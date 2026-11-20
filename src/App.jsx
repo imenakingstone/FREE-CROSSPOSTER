@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
 import { LayoutDashboard, CalendarDays, FileText, History, Link2, Settings, LogOut, ImagePlus, Send, ShieldCheck, Video, Trash2, Clock3, Plus, Save, X, RefreshCw, Bell, CheckCheck, Activity, MessageSquare, Search, SlidersHorizontal, Scissors, MapPin, EyeOff, MessageCircle, Crop, Sparkles, ChevronDown, Film, Check, Globe, Users, Play, RotateCcw, Camera } from 'lucide-react'
 
@@ -256,9 +256,11 @@ export default function App() {
   }
   async function selectInboxConversation(conversation) {
     setActiveConversationId(conversation.id)
-    await supabase.from('inbox_conversations').update({ unread_count: 0 }).eq('id', conversation.id).eq('user_id', session.user.id)
+    setInboxDraft('')
+    setInboxMessages([])
     setInboxConversations(current => current.map(item => item.id === conversation.id ? { ...item, unread_count: 0 } : item))
-    await loadInboxMessages(conversation.id)
+    const { error } = await supabase.from('inbox_conversations').update({ unread_count: 0 }).eq('id', conversation.id).eq('user_id', session.user.id)
+    if (error) setNotice(error.message)
   }
   async function sendInboxMessage(event) {
     event.preventDefault()
@@ -978,38 +980,76 @@ function Accounts({accounts,onConnect,onConnectTikTok,onDisconnect,busy}) {
   </>
 }
 function InboxView({conversations,messages,activeId,onSelect,draft,setDraft,onSend,loading,sending,accounts,onRefresh,onDiagnose,diagnostic,diagnosticLoading,isAdmin,lastSynced}) {
+  const [search,setSearch] = useState('')
+  const streamRef = useRef(null)
   const active=conversations.find(item=>item.id===activeId)
   const connected=accounts.some(item=>item.platform==='instagram'&&item.account_status==='connected')
   const webhookUrl='https://apggccljgfodaxdpxptc.supabase.co/functions/v1/meta-messaging-webhook'
+  const visibleConversations=conversations.filter(item=>{
+    const name=(item.participant_username||item.participant_name||'').toLowerCase()
+    const preview=(item.last_message_text||'').toLowerCase()
+    return !search.trim() || name.includes(search.toLowerCase()) || preview.includes(search.toLowerCase())
+  })
+  const initials=value=>(String(value||'IG').replace(/^@/,'').split(/[._\s-]/).filter(Boolean).slice(0,2).map(part=>part[0]).join('').toUpperCase()||'IG')
+  const formatTime=value=>{
+    if(!value)return ''
+    const date=new Date(value)
+    if(Number.isNaN(date.getTime()))return ''
+    const sameDay=date.toDateString()===new Date().toDateString()
+    return sameDay?date.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):date.toLocaleDateString([],{month:'short',day:'numeric'})
+  }
+  useEffect(()=>{
+    const node=streamRef.current
+    if(node) node.scrollTop=node.scrollHeight
+  },[messages,activeId])
   return <section className="inbox-page">
-    <PageHeader eyebrow="INSTAGRAM DIRECT MESSAGES" title="Instagram inbox." description="Read incoming Instagram DMs and reply from one place. Replies are subject to Meta's messaging rules."/>
+    <PageHeader eyebrow="INSTAGRAM DIRECT MESSAGES" title="Instagram inbox." description="Your Instagram conversations, together in one place."/>
     {!connected && <div className="card inbox-setup-note"><MessageSquare size={22}/><div><strong>Connect an Instagram professional account to get started</strong><p className="muted small">Connect an Instagram Business or Creator account in Connected accounts. Personal Instagram profiles are not supported by Meta's messaging API.</p></div></div>}
-    <div className="card inbox-shell">
+    <div className="inbox-shell ig-inbox-shell">
       <aside className="inbox-list-panel">
-        <div className="inbox-list-heading"><strong>Messages</strong><span>{conversations.length}</span><button type="button" className="inbox-refresh" onClick={onRefresh} disabled={loading} title="Refresh Instagram messages"><RefreshCw size={14} className={loading?'inbox-refreshing':''}/></button></div>
-        <div className="inbox-filters"><span className="inbox-channel-tag instagram">Instagram Direct</span><small>{lastSynced?'Synced '+lastSynced.toLocaleTimeString():'Waiting for sync'} · auto refresh 12s</small></div>
-        <div className="inbox-conversation-list">
-          {conversations.map(item=><button key={item.id} className={'inbox-conversation '+(activeId===item.id?'active':'')} onClick={()=>onSelect(item)}>
-            <span className={'inbox-avatar '+item.platform}>{item.platform==='instagram'?'◎':'f'}</span>
-            <span className="inbox-conversation-copy"><strong>{item.participant_username?'@'+item.participant_username:item.participant_name||'Customer'}</strong><small>{item.last_message_text||'New conversation'}</small></span>
-            <span className="inbox-conversation-meta">{item.last_message_at&&<small>{new Date(item.last_message_at).toLocaleDateString()}</small>}{item.unread_count>0&&<i>{item.unread_count}</i>}</span>
-          </button>)}
-          {!conversations.length&&<div className="inbox-empty-list">{loading?'Syncing Instagram inbox…':'No conversations synced yet'}</div>}
+        <div className="inbox-list-heading"><div><strong>Messages</strong><span className="inbox-count">{conversations.length}</span></div><button type="button" className="inbox-refresh" onClick={onRefresh} disabled={loading} title="Refresh Instagram messages" aria-label="Refresh messages"><RefreshCw size={15} className={loading?'inbox-refreshing':''}/></button></div>
+        <div className="inbox-account-strip"><span className="inbox-instagram-mark"><PlatformLogo platform="instagram"/></span><div><strong>Instagram Direct</strong><small>{lastSynced?'Synced '+lastSynced.toLocaleTimeString():'Waiting for sync'}</small></div><i title="Instagram connected"/></div>
+        <label className="inbox-search"><Search size={15}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search messages or people…" aria-label="Search conversations"/></label>
+        <div className="inbox-conversation-list" aria-label="Instagram conversations">
+          {visibleConversations.map(item=>{
+            const username=item.participant_username?'@'+item.participant_username:item.participant_name||'Instagram user'
+            return <button type="button" key={item.id} className={'inbox-conversation '+(activeId===item.id?'active':'')} onClick={()=>onSelect(item)} aria-current={activeId===item.id?'true':undefined}>
+              <span className="inbox-avatar instagram">{initials(item.participant_username||item.participant_name)}</span>
+              <span className="inbox-conversation-copy"><strong>{username}</strong><small>{item.last_message_text||'Shared an attachment'}</small></span>
+              <span className="inbox-conversation-meta"><small>{formatTime(item.last_message_at)}</small>{item.unread_count>0&&<i>{item.unread_count>99?'99+':item.unread_count}</i>}</span>
+            </button>
+          })}
+          {!visibleConversations.length&&<div className="inbox-empty-list">{search?'No conversations match your search.':loading?'Syncing Instagram inbox…':'No conversations yet. New DMs will appear here.'}</div>}
         </div>
       </aside>
       <section className="inbox-chat-panel">
         {active ? <>
-          <header className="inbox-chat-header"><div><strong>{active.participant_username?'@'+active.participant_username:active.participant_name||'Customer'}</strong><span>Instagram Direct · {active.status}</span></div><span className="inbox-channel-tag instagram">Instagram</span></header>
-          <div className="inbox-message-stream">
-            {messages.map(message=><div className={'inbox-bubble-row '+message.direction} key={message.id}><div className="inbox-bubble"><p>{message.message_text||'Media attachment'}</p>{message.attachments?.length>0&&<small>{message.attachments.length} attachment(s) · media previews are not available yet</small>}<time>{new Date(message.sent_at).toLocaleString()}</time></div></div>)}
-            {!messages.length&&<div className="inbox-empty-chat">No messages have been synced for this conversation yet.</div>}
+          <header className="inbox-chat-header ig-chat-header">
+            <span className="inbox-avatar instagram">{initials(active.participant_username||active.participant_name)}</span>
+            <div className="inbox-chat-identity"><strong>{active.participant_username?'@'+active.participant_username:active.participant_name||'Instagram user'}</strong><span>Instagram conversation</span></div>
+            <span className="inbox-chat-channel"><PlatformLogo platform="instagram"/> Instagram</span>
+          </header>
+          <div className="inbox-message-stream ig-message-stream" ref={streamRef} aria-live="polite" aria-label="Conversation messages">
+            <div className="inbox-chat-intro"><span className="inbox-avatar instagram">{initials(active.participant_username||active.participant_name)}</span><strong>{active.participant_username?'@'+active.participant_username:active.participant_name||'Instagram user'}</strong><small>Instagram Direct</small></div>
+            {messages.map(message=><div className={'inbox-bubble-row '+(message.direction==='outbound'?'outbound':'inbound')} key={message.id}>
+              {message.direction!=='outbound'&&<span className="inbox-message-avatar">{initials(active.participant_username||active.participant_name)}</span>}
+              <div className="inbox-bubble"><p>{message.message_text|| (message.attachments?.length?'Attachment':'Unsupported message')}</p>
+                {message.attachments?.length>0&&<small className="inbox-attachment-note">{message.attachments.length} attachment{message.attachments.length===1?'':'s'} · preview unavailable</small>}
+                <time>{formatTime(message.sent_at)}{message.direction==='outbound'&&message.delivery_status==='sent'?' · Sent':''}</time>
+              </div>
+            </div>)}
+            {!messages.length&&<div className="inbox-empty-chat">No messages are available in this conversation yet.</div>}
           </div>
-          <form className="inbox-reply-form" onSubmit={onSend}><textarea rows="2" maxLength="2000" value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Write a reply…" /><button className="primary-btn" disabled={sending||!draft.trim()}>{sending?'Sending…':'Send reply'} <Send size={15}/></button><small>Text replies only · available during Meta's 24-hour standard messaging window.</small></form>
-        </> : <div className="inbox-empty-chat"><MessageSquare size={30}/><h3>Your conversations live here.</h3><p>Connect an Instagram professional account, then refresh to import existing conversations.</p></div>}
+          <form className="inbox-reply-form ig-reply-form" onSubmit={onSend}>
+            <textarea rows="1" maxLength="2000" value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();e.currentTarget.form?.requestSubmit()}}} placeholder="Message…" aria-label="Write an Instagram reply" />
+            <button className="ig-send-button" disabled={sending||!draft.trim()} aria-label="Send message">{sending?'Sending…':<Send size={18}/>}</button>
+            <small>Press Enter to send · Shift + Enter for a new line · Replies follow Meta's messaging window.</small>
+          </form>
+        </> : <div className="inbox-empty-chat"><MessageSquare size={30}/><h3>Your messages</h3><p>Select a conversation to read and reply to Instagram DMs.</p></div>}
       </section>
     </div>
-    {isAdmin && <div className="inbox-diagnostic-action"><button type="button" className="secondary-action" onClick={onDiagnose} disabled={diagnosticLoading}>{diagnosticLoading?'Running diagnostic…':'Run admin connection diagnostic'}</button><span className="muted small">Runs live Meta API checks and displays every returned result below.</span></div>}
-    {isAdmin && diagnostic && <section className="card inbox-diagnostic-report" aria-live="polite"><div className="section-heading"><div><h3>Instagram diagnostic results</h3><p className="muted small">Full response from the secure diagnostic function. Access tokens and message contents are excluded.</p></div><span className={'health-status '+(diagnostic.status==='completed'?'healthy':diagnostic.status==='running'?'warning':'critical')}>{diagnostic.status==='completed'?'Completed':diagnostic.status==='running'?'Running':'Failed'}</span></div>{diagnostic.error&&<p className="notice">{diagnostic.error}</p>}<pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',fontSize:12,lineHeight:1.55,maxHeight:560,overflowY:'auto',margin:0}}>{JSON.stringify(diagnostic,null,2)}</pre></section>}
+    {isAdmin && <div className="inbox-diagnostic-action"><button type="button" className="secondary-action" onClick={onDiagnose} disabled={diagnosticLoading}>{diagnosticLoading?'Running diagnostic…':'Run admin connection diagnostic'}</button><span className="muted small">Secure live checks · tokens and message contents are never displayed.</span></div>}
+    {isAdmin && diagnostic && <section className="card inbox-diagnostic-report" aria-live="polite"><div className="section-heading"><div><h3>Instagram diagnostic results</h3><p className="muted small">Full response from the secure diagnostic function.</p></div><span className={'health-status '+(diagnostic.status==='completed'?'healthy':diagnostic.status==='running'?'warning':'critical')}>{diagnostic.status==='completed'?'Completed':diagnostic.status==='running'?'Running':'Failed'}</span></div>{diagnostic.error&&<p className="notice">{diagnostic.error}</p>}<pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',fontSize:12,lineHeight:1.55,maxHeight:560,overflowY:'auto',margin:0}}>{JSON.stringify(diagnostic,null,2)}</pre></section>}
     {isAdmin && <details className="card inbox-webhook-guide"><summary>Developer setup · connect Meta webhooks</summary><p className="muted small">Add this HTTPS callback URL to the Webhooks product in your Meta app. Set the verification token as the Supabase Edge Function secret META_WEBHOOK_VERIFY_TOKEN. Your existing META_APP_SECRET is used to validate webhook signatures.</p><code className="webhook-url">{webhookUrl}</code><p className="muted small">Subscribe the Instagram object to the <code>messages</code> event. Meta App Review must approve messaging permissions before ordinary customers' conversations are available. Keep the standard reply window in mind.</p></details>}
   </section>
 }
