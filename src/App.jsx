@@ -1140,9 +1140,9 @@ function InboxView({conversations,messages,activeId,onSelect,draft,setDraft,onSe
             <span className="inbox-chat-channel"><PlatformLogo platform="instagram"/> Instagram</span>
           </header>
           <div className="inbox-message-stream ig-message-stream" ref={streamRef} aria-live="polite" aria-label="Conversation messages">
-            <div className="inbox-chat-intro"><span className="inbox-avatar instagram">{initials(active.participant_username||active.participant_name)}</span><strong>{active.participant_username?'@'+active.participant_username:active.participant_name||'Instagram user'}</strong><small>Instagram Direct</small></div>
+            <div className="inbox-chat-intro"><span className="inbox-avatar instagram">{active.participant_profile_picture_url?<img src={active.participant_profile_picture_url} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e=>{e.currentTarget.style.display="none"}}/>:initials(active.participant_username||active.participant_name)}</span><strong>{active.participant_username?'@'+active.participant_username:active.participant_name||'Instagram user'}</strong><small>Instagram Direct</small></div>
             {messages.map(message=><div className={'inbox-bubble-row '+(message.direction==='outbound'?'outbound':'inbound')} key={message.id}>
-              {message.direction!=='outbound'&&<span className="inbox-message-avatar">{initials(active.participant_username||active.participant_name)}</span>}
+              {message.direction!=='outbound'&&<span className="inbox-message-avatar">{active.participant_profile_picture_url?<img src={active.participant_profile_picture_url} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e=>{e.currentTarget.style.display="none"}}/>:initials(active.participant_username||active.participant_name)}</span>}
               <div className="inbox-bubble">{message.message_text&&<p>{renderInboxText(message.message_text)}</p>}
                 {message.attachments?.map((attachment,index)=><InboxAttachment key={attachment.id||index} attachment={attachment}/>)}
                 {!message.message_text&&!message.attachments?.length&&<p>Unsupported message</p>}
