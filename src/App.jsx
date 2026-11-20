@@ -483,9 +483,9 @@ export default function App() {
     event.preventDefault()
     if (!caption.trim() && !preparedFile) return setNotice('Add a caption or choose a photo/video first.')
     if (!selectedPlatforms.length) return setNotice('Choose at least one destination.')
+    const missingPlatforms = selectedPlatforms.filter(platform => !socialAccounts.some(item => item.platform === platform && item.account_status === 'connected'))
+    if (missingPlatforms.length) return setNotice('Connect an account for every selected platform before publishing: ' + missingPlatforms.join(', '))
     const targets = selectedPlatforms.flatMap(platform => socialAccounts.filter(item => item.platform === platform && item.account_status === 'connected').map(account => ({ platform, account })))
-    if (!targets.length) return setNotice('Connect at least one selected social account before publishing.')
-    if (targets.length !== selectedPlatforms.length) return setNotice('Connect an account for every selected platform before publishing.')
     if (selectedPlatforms.includes('tiktok') && (!preparedFile || !preparedFile.type.startsWith('video/'))) return setNotice('TikTok publishing currently requires a video.')
     setBusy(true); setNotice('Uploading media and preparing your post…')
     let mediaPath = null
