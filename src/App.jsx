@@ -1154,7 +1154,7 @@ function InboxView({conversations,messages,activeId,onSelect,draft,setDraft,onSe
           <form className="inbox-reply-form ig-reply-form" onSubmit={onSend}>
             <textarea rows="1" maxLength="2000" value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();e.currentTarget.form?.requestSubmit()}}} placeholder="Message…" aria-label="Write an Instagram reply" />
             <button className="ig-send-button" disabled={sending||!draft.trim()} aria-label="Send message">{sending?'Sending…':<Send size={18}/>}</button>
-            <small>Press Enter to send · Shift + Enter for a new line · Replies follow Meta's messaging window.</small>
+            
           </form>
         </> : <div className="inbox-empty-chat"><MessageSquare size={30}/><h3>Your messages</h3><p>Select a conversation to read and reply to Instagram DMs.</p></div>}
       </section>
