@@ -68,9 +68,28 @@ Deno.serve(async (req: Request) => {
           const participants = Array.isArray(thread?.participants?.data) ? thread.participants.data : [];
           const other = participants.find((p: any) => String(p?.id || "") !== String(account.platform_user_id));
           if (!other?.id) continue;
-          const { data: existing } = await admin.from("inbox_conversations").select("id,unread_count,last_inbound_at,last_message_at")
+          const { data: existing } = await admin.from("inbox_conversations").select("id,unread_count,last_inbound_at,last_message_at,participant_profile_picture_url")
             .eq("social_account_id", account.id).eq("platform_conversation_id", String(other.id)).maybeSingle();
-          // Skip unchanged threads to avoid repeated Meta API calls and application throttling.
+          let participantProfilePictureUrl = existing?.participant_profile_picture_url || null;
+          if (!participantProfilePictureUrl) {
+            try {
+              const profileUrl = new URL("https://graph.facebook.com/" + API_VERSION + "/" + encodeURIComponent(String(other.id)));
+              profileUrl.searchParams.set("fields", "id,name,username,profile_pic");
+              profileUrl.searchParams.set("access_token", token);
+              const profileResponse = await fetch(profileUrl, { signal: AbortSignal.timeout(10000) });
+              const profileData = await profileResponse.json().catch(() => ({}));
+              if (profileResponse.ok && typeof profileData?.profile_pic === "string" && profileData.profile_pic.startsWith("https://")) {
+                participantProfilePictureUrl = profileData.profile_pic;
+                await admin.from("inbox_conversations").update({ participant_profile_picture_url: participantProfilePictureUrl })
+                  .eq("id", existing.id).eq("user_id", user.id);
+              } else if (!profileResponse.ok) {
+                console.info("Instagram participant profile photo unavailable", { status: profileResponse.status, code: profileData?.error?.code });
+              }
+            } catch (profileError) {
+              console.info("Instagram participant profile photo lookup skipped", profileError instanceof Error ? profileError.message : "unknown error");
+            }
+          }
+          // Skip unchanged threads after attempting to fill a missing profile photo.
           if (existing?.last_message_at && thread.updated_time &&
               new Date(existing.last_message_at).getTime() >= new Date(thread.updated_time).getTime()) {
             conversationsSynced++;
@@ -100,6 +119,7 @@ Deno.serve(async (req: Request) => {
             user_id: user.id, social_account_id: account.id, platform: "instagram",
             platform_conversation_id: String(other.id), participant_id: String(other.id),
             participant_name: other.name || other.username || null, participant_username: other.username || null,
+            participant_profile_picture_url: participantProfilePictureUrl,
             last_message_text: latestText, last_message_at: latestAt, last_inbound_at: lastInbound,
             unread_count: Number(existing?.unread_count || 0), updated_at: new Date().toISOString()
           }, { onConflict: "social_account_id,platform_conversation_id" }).select("id,unread_count").single();
