@@ -49,18 +49,32 @@ Deno.serve(async (req: Request) => {
     for (const account of eligible) {
       try {
         const token = await decryptToken(account.access_token_encrypted);
+        // Keep the conversations request lightweight. Meta can reject nested message
+        // expansions with error code 1 when too much data is requested in one call.
         const query = new URL("https://graph.facebook.com/" + API_VERSION + "/" + encodeURIComponent(account.platform_user_id) + "/conversations");
         query.searchParams.set("platform", "instagram");
-        query.searchParams.set("limit", "50");
-        query.searchParams.set("fields", "id,updated_time,participants,messages.limit(20){id,created_time,from,to,message,attachments}");
+        query.searchParams.set("limit", "10");
+        query.searchParams.set("fields", "id,updated_time,participants");
         const response = await fetch(query, { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(20000) });
         const payload = await response.json().catch(() => ({}));
-        if (!response.ok) { console.warn("Meta conversations request rejected", { status: response.status, code: payload?.error?.code, subcode: payload?.error?.error_subcode, type: payload?.error?.type, message: String(payload?.error?.message || "").slice(0, 260) }); errors.push(providerError(payload)); continue; }
+        if (!response.ok) { console.warn("Meta conversations list rejected", { status: response.status, code: payload?.error?.code, subcode: payload?.error?.error_subcode, type: payload?.error?.type, message: String(payload?.error?.message || "").slice(0, 260) }); errors.push("Conversations list: " + providerError(payload)); continue; }
         for (const thread of (Array.isArray(payload?.data) ? payload.data : [])) {
           const participants = Array.isArray(thread?.participants?.data) ? thread.participants.data : [];
           const other = participants.find((p: any) => String(p?.id || "") !== String(account.platform_user_id));
           if (!other?.id) continue;
-          const messages = Array.isArray(thread?.messages?.data) ? thread.messages.data : [];
+          // Fetch messages separately and cap each thread at 10 messages. This avoids
+          // expanding message bodies and attachments for every conversation at once.
+          const messagesUrl = new URL("https://graph.facebook.com/" + API_VERSION + "/" + encodeURIComponent(String(thread.id)) + "/messages");
+          messagesUrl.searchParams.set("limit", "10");
+          messagesUrl.searchParams.set("fields", "id,created_time,from,to,message,attachments");
+          const messagesResponse = await fetch(messagesUrl, { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(15000) });
+          const messagesPayload = await messagesResponse.json().catch(() => ({}));
+          if (!messagesResponse.ok) {
+            console.warn("Meta conversation messages rejected", { conversation_id: String(thread.id), status: messagesResponse.status, code: messagesPayload?.error?.code, subcode: messagesPayload?.error?.error_subcode, message: String(messagesPayload?.error?.message || "").slice(0, 260) });
+            errors.push("Messages for conversation " + String(thread.id) + ": " + providerError(messagesPayload));
+            continue;
+          }
+          const messages = Array.isArray(messagesPayload?.data) ? messagesPayload.data : [];
           const ordered = [...messages].sort((a: any, b: any) => new Date(a.created_time || 0).getTime() - new Date(b.created_time || 0).getTime());
           const latest = ordered[ordered.length - 1];
           const latestText = latest?.message || (latest?.attachments?.data?.length ? "Attachment" : "New message");
