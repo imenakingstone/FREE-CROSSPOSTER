@@ -129,6 +129,13 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    if (session?.user?.id && isAuthPath(window.location.pathname)) {
+      setActiveView('overview')
+      window.history.replaceState({ workspaceView: 'overview' }, '', '/app/overview')
+    }
+  }, [session?.user?.id])
+
+  useEffect(() => {
     if (!session?.user?.id) return
     let active = true
     ;(async () => {
