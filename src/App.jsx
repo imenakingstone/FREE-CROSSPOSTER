@@ -213,18 +213,26 @@ export default function App() {
   }
   async function diagnoseInstagramInbox() {
     setInboxDiagnosticLoading(true)
-    setInboxDiagnostic(null)
+    setInboxDiagnostic({ status: 'running', started_at: new Date().toISOString(), note: 'Checking the saved Instagram connection and Meta Graph API. No access tokens are displayed.' })
     try {
       const { data, error } = await supabase.functions.invoke('meta-inbox-diagnostic', { body: {} })
       if (error) {
         let details = null
         try { details = await error.context?.json() } catch {}
-        throw new Error(details?.error || data?.error || error.message || 'Instagram diagnostic failed.')
+        setInboxDiagnostic({
+          status: 'failed',
+          checked_at: new Date().toISOString(),
+          http_status: error.context?.status || null,
+          error: details?.error || data?.error || error.message || 'Instagram diagnostic failed.',
+          response: details || null
+        })
+        return
       }
-      if (data?.error) throw new Error(data.error)
-      setInboxDiagnostic(data)
+      setInboxDiagnostic(data && typeof data === 'object'
+        ? { status: 'completed', checked_at: new Date().toISOString(), ...data }
+        : { status: 'failed', checked_at: new Date().toISOString(), error: 'The diagnostic function returned an empty response.' })
     } catch (error) {
-      setInboxDiagnostic({ error: error.message || 'Instagram diagnostic failed.' })
+      setInboxDiagnostic({ status: 'failed', checked_at: new Date().toISOString(), error: error.message || 'Instagram diagnostic failed.' })
     } finally {
       setInboxDiagnosticLoading(false)
     }
@@ -1000,8 +1008,8 @@ function InboxView({conversations,messages,activeId,onSelect,draft,setDraft,onSe
         </> : <div className="inbox-empty-chat"><MessageSquare size={30}/><h3>Your conversations live here.</h3><p>Connect an Instagram professional account, then refresh to import existing conversations.</p></div>}
       </section>
     </div>
-    {isAdmin && <div className="inbox-diagnostic-action"><button type="button" className="secondary-action" onClick={onDiagnose} disabled={diagnosticLoading}>{diagnosticLoading?'Running diagnostic…':'Run admin connection diagnostic'}</button></div>}
-    {isAdmin && diagnostic && <section className="card inbox-diagnostic-report"><h3>Instagram diagnostic results</h3><p className="muted small">This report checks the saved connection and Meta API access. It never displays access tokens.</p><pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',fontSize:12,lineHeight:1.55,maxHeight:420,overflowY:'auto'}}>{JSON.stringify(diagnostic,null,2)}</pre></section>}
+    {isAdmin && <div className="inbox-diagnostic-action"><button type="button" className="secondary-action" onClick={onDiagnose} disabled={diagnosticLoading}>{diagnosticLoading?'Running diagnostic…':'Run admin connection diagnostic'}</button><span className="muted small">Runs live Meta API checks and displays every returned result below.</span></div>}
+    {isAdmin && diagnostic && <section className="card inbox-diagnostic-report" aria-live="polite"><div className="section-heading"><div><h3>Instagram diagnostic results</h3><p className="muted small">Full response from the secure diagnostic function. Access tokens and message contents are excluded.</p></div><span className={'health-status '+(diagnostic.status==='completed'?'healthy':diagnostic.status==='running'?'warning':'critical')}>{diagnostic.status==='completed'?'Completed':diagnostic.status==='running'?'Running':'Failed'}</span></div>{diagnostic.error&&<p className="notice">{diagnostic.error}</p>}<pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',fontSize:12,lineHeight:1.55,maxHeight:560,overflowY:'auto',margin:0}}>{JSON.stringify(diagnostic,null,2)}</pre></section>}
     {isAdmin && <details className="card inbox-webhook-guide"><summary>Developer setup · connect Meta webhooks</summary><p className="muted small">Add this HTTPS callback URL to the Webhooks product in your Meta app. Set the verification token as the Supabase Edge Function secret META_WEBHOOK_VERIFY_TOKEN. Your existing META_APP_SECRET is used to validate webhook signatures.</p><code className="webhook-url">{webhookUrl}</code><p className="muted small">Subscribe the Instagram object to the <code>messages</code> event. Meta App Review must approve messaging permissions before ordinary customers' conversations are available. Keep the standard reply window in mind.</p></details>}
   </section>
 }
