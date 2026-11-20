@@ -1141,3 +1141,6 @@ body,.dashboard,.socialync-shell{background:#030526;color:#f5f7ff}
 .history-destination{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;color:#aab6d5;font-size:10px}
 .history-destination .secondary-action{padding:6px 9px;font-size:9px}
 @media(max-width:560px){.history-post-heading{flex-direction:column}.history-destination{align-items:flex-start}}
+
+/* Direct workspace URLs retain the existing sidebar navigation appearance. */
+.app-sidebar a.sidebar-link{text-decoration:none}
