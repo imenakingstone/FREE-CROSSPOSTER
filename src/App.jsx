@@ -22,6 +22,13 @@ function getAuthRedirectUrl() {
   return localHost ? window.location.origin : APP_PRODUCTION_URL
 }
 
+const workspaceViews = new Set(['overview','create','calendar','history','inbox','accounts','settings','system-health'])
+function viewFromPath(pathname) {
+  const match = pathname.match(/^\/app(?:\/([^/]+))?\/?$/)
+  const candidate = match?.[1] || 'overview'
+  return workspaceViews.has(candidate) ? candidate : 'overview'
+}
+
 const navItems = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'create', label: 'Create post', icon: Plus },
@@ -37,13 +44,13 @@ export default function App() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const [mode, setMode] = useState('login')
-  const [showAuth, setShowAuth] = useState(false)
+  const [showAuth, setShowAuth] = useState(() => window.location.pathname.startsWith('/app/'))
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [authBusy, setAuthBusy] = useState(false)
   const [notice, setNotice] = useState('')
-  const [activeView, setActiveView] = useState('overview')
+  const [activeView, setActiveView] = useState(() => viewFromPath(window.location.pathname))
   const [posts, setPosts] = useState([])
   const [socialAccounts, setSocialAccounts] = useState([])
   const [postDestinations, setPostDestinations] = useState([])
@@ -87,8 +94,24 @@ export default function App() {
     }
   }, [])
 
+  function navigateToView(view, replace = false) {
+    if (!workspaceViews.has(view)) return
+    setActiveView(view)
+    setNotice('')
+    const nextUrl = '/app/' + view
+    if (window.location.pathname !== nextUrl) {
+      if (replace) window.history.replaceState({ workspaceView: view }, '', nextUrl)
+      else window.history.pushState({ workspaceView: view }, '', nextUrl)
+    }
+  }
+
   useEffect(() => {
-    const handleAuthHistoryBack = () => { setShowAuth(false); setMode('login') }
+    const handleAuthHistoryBack = () => {
+      if (window.location.pathname.startsWith('/app/')) {
+        setActiveView(viewFromPath(window.location.pathname))
+        setShowAuth(true)
+      } else { setShowAuth(false); setMode('login'); setActiveView('overview') }
+    }
     window.addEventListener('popstate', handleAuthHistoryBack)
     return () => window.removeEventListener('popstate', handleAuthHistoryBack)
   }, [])
@@ -540,7 +563,7 @@ export default function App() {
         setNotice('The platform accepted your post for processing. Check Publishing history for its final status.')
       }
       await refreshWorkspace()
-      setActiveView('history')
+      navigateToView('history')
     } catch (error) {
       if (mediaPath) await supabase.storage.from('user-media').remove([mediaPath])
       setNotice(error.message || 'Could not publish this post.')
@@ -609,20 +632,20 @@ export default function App() {
 
   if (!isSupabaseConfigured) return <SetupMessage />
   if (loading) return <main className="center-screen"><div className="loader" />Loading FREE CROSSPOSTER…</main>
-  if (!session) return showAuth ? <AuthScreen mode={mode} setMode={setMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} displayName={displayName} setDisplayName={setDisplayName} busy={authBusy} notice={notice} onSubmit={handleAuth} onGoogleSignIn={handleGoogleSignIn} onBackToHome={closeAuth} /> : <LandingPage onGetStarted={() => openAuth('signup')} onSignIn={() => openAuth('login')} />
+  if (!session) return (showAuth || window.location.pathname.startsWith('/app/')) ? <AuthScreen mode={mode} setMode={setMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} displayName={displayName} setDisplayName={setDisplayName} busy={authBusy} notice={notice} onSubmit={handleAuth} onGoogleSignIn={handleGoogleSignIn} onBackToHome={closeAuth} /> : <LandingPage onGetStarted={() => openAuth('signup')} onSignIn={() => openAuth('login')} />
 
   const activeTitle = navItems.find(item => item.id === activeView)?.label || 'Overview'
   return <main className="dashboard socialync-shell">
     <aside className="app-sidebar">
       <div className="brand"><CrossposterLogo /><span>FREE CROSSPOSTER</span></div>
       <p className="sidebar-label">WORKSPACE</p>
-      {navItems.filter(item => item.id !== 'system-health' || session.user.email?.toLowerCase() === 'imenaking12@gmail.com').map(item => { const Icon = item.icon; return <button key={item.id} className={activeView === item.id ? 'sidebar-link active' : 'sidebar-link'} onClick={() => { setActiveView(item.id); setNotice('') }}><Icon size={17} /> {item.label}</button> })}
+      {navItems.filter(item => item.id !== 'system-health' || session.user.email?.toLowerCase() === 'imenaking12@gmail.com').map(item => { const Icon = item.icon; return <a key={item.id} href={'/app/' + item.id} aria-current={activeView === item.id ? 'page' : undefined} className={activeView === item.id ? 'sidebar-link active' : 'sidebar-link'} onClick={event => { event.preventDefault(); navigateToView(item.id) }}><Icon size={17} /> {item.label}</a> })}
       <div className="sidebar-bottom"><div className="sidebar-user"><span className="avatar">{(session.user.email || 'U').slice(0,1).toUpperCase()}</span><span className="sidebar-user-email">{session.user.email}</span></div><nav className="sidebar-legal-links" aria-label="Help and legal"><a href="/faq/">Help & FAQ</a><a href="/terms/">Terms</a><a href="/privacy.html">Privacy</a><a href="/data-deletion.html">Data deletion</a></nav><button className="sidebar-signout" onClick={handleSignOut}><LogOut size={16} /> Sign out</button></div>
     </aside>
     <section className="app-main">
       <header className="topbar"><div><span className="topbar-kicker">YOUR WORKSPACE</span><strong>{activeTitle}</strong></div><div className="user-area"><span className="user-email">{session.user.email}</span><div className="notification-wrap"><button className="icon-btn notification-trigger" onClick={()=>setNotificationOpen(v=>!v)} title="Notifications"><Bell size={17}/>{notifications.some(n=>!n.read_at)&&<i/>}</button>{notificationOpen&&<div className="notification-panel"><div className="notification-heading"><strong>Notifications</strong><button onClick={markAllNotificationsRead}><CheckCheck size={13}/> Mark all read</button></div>{notifications.map(item=><button key={item.id} className={'notification-item '+(!item.read_at?'unread':'')} onClick={()=>markNotificationRead(item)}><strong>{item.title}</strong><span>{item.body}</span><small>{new Date(item.created_at).toLocaleString()}</small></button>)}{!notifications.length&&<p className="empty-state">No notifications yet.</p>}</div>}</div><button className="icon-btn" onClick={refreshWorkspace} title="Refresh workspace"><RefreshCw size={17}/></button></div></header>
       <div className="dashboard-content">
-        {activeView === 'overview' && <Overview posts={posts} accounts={socialAccounts} schedules={schedules} logs={logs} onNavigate={setActiveView} />}
+        {activeView === 'overview' && <Overview posts={posts} accounts={socialAccounts} schedules={schedules} logs={logs} onNavigate={navigateToView} />}
         {activeView === 'create' && <CreatePost caption={caption} setCaption={setCaption} file={file} setFile={setFile} selectedPlatforms={selectedPlatforms} setSelectedPlatforms={setSelectedPlatforms} editorSettings={editorSettings} setEditorSettings={setEditorSettings} platformSettings={platformSettings} setPlatformSettings={setPlatformSettings} onSubmit={publishNewPost} busy={busy} onOpenChatGPT={openChatGPTForHashtags} /> }
         {activeView === 'calendar' && <CalendarView posts={posts} schedules={schedules} onSchedule={schedulePost} onCancel={cancelSchedule} busy={busy} schedulePostId={schedulePostId} setSchedulePostId={setSchedulePostId} destinationId={scheduleDestinationId} setDestinationId={setScheduleDestinationId} scheduleAt={scheduleAt} setScheduleAt={setScheduleAt} destinations={destRows} />}
         {activeView === 'history' && <HistoryView logs={logs} posts={posts} destinations={postDestinations} onPublish={publishDestination} publishingPostId={publishingPostId} />}
