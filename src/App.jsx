@@ -317,7 +317,7 @@ export default function App() {
       if (cached?.length && session?.user?.id) { setInboxConversations(cached); if (!activeConversationId) setActiveConversationId(cached[0].id) }
     }
     const { data, error } = await supabase.from('inbox_conversations')
-      .select('id,platform,social_account_id,participant_id,participant_name,participant_username,last_message_text,last_message_at,last_inbound_at,unread_count,status')
+      .select('id,platform,social_account_id,participant_id,participant_name,participant_username,participant_profile_picture_url,last_message_text,last_message_at,last_inbound_at,unread_count,status')
       .eq('user_id', session.user.id).eq('platform', 'instagram').order('last_message_at', { ascending: false }).limit(20)
     if (error) { setNotice(error.message); return }
     setInboxConversations(data || [])
@@ -370,7 +370,7 @@ export default function App() {
     if (error) setNotice(error.message); else { setPosts(data || []); await setWorkspaceCache(session.user.id, 'posts', data || []) }
   }
   async function loadAccounts() {
-    const { data, error } = await supabase.from('social_accounts').select('id,platform,platform_user_id,username,display_name,account_status,token_expires_at,connected_at,environment').eq('environment', 'production').order('connected_at', { ascending: false })
+    const { data, error } = await supabase.from('social_accounts').select('id,platform,platform_user_id,username,display_name,profile_picture_url,account_status,token_expires_at,connected_at,environment').eq('environment', 'production').order('connected_at', { ascending: false })
     if (error) setNotice(error.message); else { setSocialAccounts(data || []); await setWorkspaceCache(session.user.id, 'accounts', data || []) }
   }
   async function loadDestinations() {
@@ -1046,14 +1046,14 @@ function Accounts({accounts,onConnect,onConnectTikTok,onDisconnect,busy}) {
       </div>
       <div className="instagram-connect-accounts">
         <div className="instagram-connect-account-heading"><strong>Your Instagram accounts</strong><span>{instagramAccounts.filter(a=>a.account_status==='connected').length} connected</span></div>
-        {instagramAccounts.length ? instagramAccounts.map(a=><div className="channel-row" key={a.id}><span><i className="connected-indicator"/> {a.username?'@'+a.username:a.display_name||a.platform_user_id}</span><button className="danger-action" onClick={()=>onDisconnect(a)}><Trash2 size={13}/> Disconnect</button></div>) : <p>No Instagram accounts connected yet.</p>}
+        {instagramAccounts.length ? instagramAccounts.map(a=><div className="channel-row" key={a.id}><span className="account-identity"><span className="profile-avatar account-profile-avatar">{a.profile_picture_url?<img src={a.profile_picture_url} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e=>{e.currentTarget.style.display="none"}}/>:<PlatformLogo platform="instagram"/>}</span><i className="connected-indicator"/> {a.username?'@'+a.username:a.display_name||a.platform_user_id}</span><button className="danger-action" onClick={()=>onDisconnect(a)}><Trash2 size={13}/> Disconnect</button></div>) : <p>No Instagram accounts connected yet.</p>}
       </div>
     </section>
     <div className="accounts-grid accounts-secondary-grid">
       <article className="account-card card">
         <div className="account-card-top"><span className="platform-mark tiktok"><PlatformLogo platform="tiktok"/></span><span className="account-status pending">{tiktokAccounts.filter(a=>a.account_status==='connected').length} connected</span></div>
         <h2>TikTok</h2><p className="muted small">Connect your TikTok account for video publishing.</p>
-        {tiktokAccounts.map(a=><div className="channel-row" key={a.id}><span>{a.username?'@'+a.username:a.display_name||a.platform_user_id}</span><button className="danger-action" onClick={()=>onDisconnect(a)}><Trash2 size={13}/> Disconnect</button></div>)}
+        {tiktokAccounts.map(a=><div className="channel-row" key={a.id}><span className="account-identity"><span className="profile-avatar account-profile-avatar">{a.profile_picture_url?<img src={a.profile_picture_url} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e=>{e.currentTarget.style.display="none"}}/>:<PlatformLogo platform="tiktok"/>}</span>{a.username?'@'+a.username:a.display_name||a.platform_user_id}</span><button className="danger-action" onClick={()=>onDisconnect(a)}><Trash2 size={13}/> Disconnect</button></div>)}
         <button className="primary-btn full" onClick={onConnectTikTok} disabled={busy}>Connect TikTok <PlatformLogo platform="tiktok"/></button>
       </article>
       <article className="account-card card">
@@ -1124,7 +1124,7 @@ function InboxView({conversations,messages,activeId,onSelect,draft,setDraft,onSe
           {visibleConversations.map(item=>{
             const username=item.participant_username?'@'+item.participant_username:item.participant_name||'Instagram user'
             return <button type="button" key={item.id} className={'inbox-conversation '+(activeId===item.id?'active':'')} onClick={()=>onSelect(item)} aria-current={activeId===item.id?'true':undefined}>
-              <span className="inbox-avatar instagram">{initials(item.participant_username||item.participant_name)}</span>
+              <span className="inbox-avatar instagram">{item.participant_profile_picture_url&&<img src={item.participant_profile_picture_url} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e=>{e.currentTarget.style.display="none"}}/>}{initials(item.participant_username||item.participant_name)}</span>
               <span className="inbox-conversation-copy"><strong>{username}</strong><small>{item.last_message_text||'Shared an attachment'}</small></span>
               <span className="inbox-conversation-meta"><small>{formatTime(item.last_message_at)}</small>{item.unread_count>0&&<i>{item.unread_count>99?'99+':item.unread_count}</i>}</span>
             </button>
@@ -1135,7 +1135,7 @@ function InboxView({conversations,messages,activeId,onSelect,draft,setDraft,onSe
       <section className="inbox-chat-panel">
         {active ? <>
           <header className="inbox-chat-header ig-chat-header">
-            <span className="inbox-avatar instagram">{initials(active.participant_username||active.participant_name)}</span>
+            <span className="inbox-avatar instagram">{active.participant_profile_picture_url&&<img src={active.participant_profile_picture_url} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e=>{e.currentTarget.style.display="none"}}/>}{initials(active.participant_username||active.participant_name)}</span>
             <div className="inbox-chat-identity"><strong>{active.participant_username?'@'+active.participant_username:active.participant_name||'Instagram user'}</strong><span>Instagram conversation</span></div>
             <span className="inbox-chat-channel"><PlatformLogo platform="instagram"/> Instagram</span>
           </header>
