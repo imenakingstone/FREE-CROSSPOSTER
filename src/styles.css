@@ -1158,3 +1158,40 @@ body,.dashboard,.socialync-shell{background:#030526;color:#f5f7ff}
 .inbox-message-avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}
 .inbox-chat-intro .inbox-avatar{position:relative;overflow:hidden}
 .inbox-chat-intro .inbox-avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}
+
+
+/* Instagram-style DM layout: fixed header/composer, independently scrolling message history */
+.ig-inbox-shell{height:min(760px,72vh);min-height:620px;overflow:hidden}
+.ig-inbox-shell .inbox-list-panel{min-height:0;height:100%;display:flex;flex-direction:column;overflow:hidden}
+.ig-inbox-shell .inbox-conversation-list{flex:1 1 auto;min-height:0;max-height:none;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:rgba(164,166,180,.28) transparent}
+.ig-inbox-shell .inbox-chat-panel{height:100%;min-height:0;overflow:hidden}
+.ig-inbox-shell .ig-chat-header{flex:0 0 76px;position:relative;z-index:2}
+.ig-inbox-shell .ig-message-stream{flex:1 1 auto;min-height:0;max-height:none;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:rgba(164,166,180,.28) transparent;padding:26px clamp(18px,4vw,52px) 30px;gap:12px;background:#0d0e12}
+.ig-inbox-shell .ig-message-stream::-webkit-scrollbar,.ig-inbox-shell .inbox-conversation-list::-webkit-scrollbar{width:6px}
+.ig-inbox-shell .ig-message-stream::-webkit-scrollbar-track,.ig-inbox-shell .inbox-conversation-list::-webkit-scrollbar-track{background:transparent}
+.ig-inbox-shell .ig-message-stream::-webkit-scrollbar-thumb,.ig-inbox-shell .inbox-conversation-list::-webkit-scrollbar-thumb{background:rgba(164,166,180,.22);border-radius:20px}
+.ig-inbox-shell .ig-message-stream::-webkit-scrollbar-thumb:hover,.ig-inbox-shell .inbox-conversation-list::-webkit-scrollbar-thumb:hover{background:rgba(164,166,180,.42)}
+.ig-inbox-shell .ig-reply-form{flex:0 0 auto;position:relative;z-index:2;grid-template-columns:minmax(0,1fr) 42px;align-items:center;padding:13px 18px;border-top:1px solid #292a31;background:#111216}
+.ig-inbox-shell .ig-reply-form textarea{min-height:42px;height:42px;max-height:120px;overflow-y:auto;line-height:18px}
+.ig-inbox-shell .inbox-chat-intro{width:min(100%,340px);margin:8px auto 30px;padding:18px 22px 20px;border:1px solid #292a31;border-radius:16px;background:#14151b;text-align:center}
+.ig-inbox-shell .inbox-chat-intro .inbox-avatar{width:76px;height:76px;margin-bottom:3px;border:2px solid rgba(255,255,255,.12)}
+.ig-inbox-shell .inbox-chat-intro strong{font-size:13px}
+.ig-inbox-shell .inbox-chat-intro small{font-size:10px;color:#a2a4ae}
+.ig-inbox-shell .inbox-bubble-row{align-items:flex-end;gap:8px}
+.ig-inbox-shell .inbox-bubble-row.inbound{justify-content:flex-start}
+.ig-inbox-shell .inbox-bubble-row.outbound{justify-content:flex-end}
+.ig-inbox-shell .inbox-message-avatar{width:26px;height:26px;margin-bottom:2px}
+.ig-inbox-shell .inbox-bubble{width:fit-content;max-width:min(68%,520px);padding:10px 14px;border-radius:20px;background:#26272d;border:1px solid #303138}
+.ig-inbox-shell .inbox-bubble-row.inbound .inbox-bubble{border-bottom-left-radius:6px;background:#26272d}
+.ig-inbox-shell .inbox-bubble-row.outbound .inbox-bubble{border:0;border-bottom-right-radius:6px;background:linear-gradient(135deg,#8c36bd,#d63f83)}
+.ig-inbox-shell .inbox-bubble time{font-size:9px;opacity:.72}
+.ig-inbox-shell .ig-reply-form>small{display:none}
+@media(max-width:720px){
+ .inbox-shell.ig-inbox-shell{height:auto;min-height:0;overflow:visible;display:flex;flex-direction:column}
+ .ig-inbox-shell .inbox-list-panel{height:auto;max-height:300px;overflow:hidden}
+ .ig-inbox-shell .inbox-conversation-list{flex:1 1 auto;max-height:220px}
+ .ig-inbox-shell .inbox-chat-panel{height:68vh;min-height:480px;max-height:720px}
+ .ig-inbox-shell .ig-message-stream{padding:18px 12px 24px}
+ .ig-inbox-shell .inbox-bubble{max-width:82%}
+ .ig-inbox-shell .ig-reply-form{padding:11px 12px}
+}
