@@ -1144,3 +1144,11 @@ body,.dashboard,.socialync-shell{background:#030526;color:#f5f7ff}
 
 /* Direct workspace URLs retain the existing sidebar navigation appearance. */
 .app-sidebar a.sidebar-link{text-decoration:none}
+
+/* Real social profile photos */
+.profile-avatar{width:34px;height:34px;flex:0 0 34px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;background:#202b42;color:#c8d4e9}
+.profile-avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.account-identity{display:inline-flex;align-items:center;gap:9px;min-width:0}
+.account-profile-avatar{width:32px;height:32px;flex-basis:32px}
+.inbox-avatar{position:relative;overflow:hidden}
+.inbox-avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%;z-index:1}
