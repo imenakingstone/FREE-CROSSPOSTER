@@ -53,25 +53,40 @@ Deno.serve(async (req: Request) => {
         // expansions with error code 1 when too much data is requested in one call.
         const query = new URL("https://graph.facebook.com/" + API_VERSION + "/" + encodeURIComponent(account.platform_user_id) + "/conversations");
         query.searchParams.set("platform", "instagram");
-        query.searchParams.set("limit", "10");
+        query.searchParams.set("limit", "20");
         query.searchParams.set("fields", "id,updated_time,participants");
         const response = await fetch(query, { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(20000) });
         const payload = await response.json().catch(() => ({}));
-        if (!response.ok) { console.warn("Meta conversations list rejected", { status: response.status, code: payload?.error?.code, subcode: payload?.error?.error_subcode, type: payload?.error?.type, message: String(payload?.error?.message || "").slice(0, 260) }); errors.push("Conversations list: " + providerError(payload)); continue; }
+        if (!response.ok) {
+          console.warn("Meta conversations list rejected", { status: response.status, code: payload?.error?.code, subcode: payload?.error?.error_subcode, type: payload?.error?.type, message: String(payload?.error?.message || "").slice(0, 260) });
+          errors.push("Conversations list: " + providerError(payload));
+          const code = Number(payload?.error?.code);
+          if (code === 4 || code === 17 || code === 613 || code === 80006) break;
+          continue;
+        }
         for (const thread of (Array.isArray(payload?.data) ? payload.data : [])) {
           const participants = Array.isArray(thread?.participants?.data) ? thread.participants.data : [];
           const other = participants.find((p: any) => String(p?.id || "") !== String(account.platform_user_id));
           if (!other?.id) continue;
-          // Fetch messages separately and cap each thread at 10 messages. This avoids
-          // expanding message bodies and attachments for every conversation at once.
+          const { data: existing } = await admin.from("inbox_conversations").select("id,unread_count,last_inbound_at,last_message_at")
+            .eq("social_account_id", account.id).eq("platform_conversation_id", String(other.id)).maybeSingle();
+          // Skip unchanged threads to avoid repeated Meta API calls and application throttling.
+          if (existing?.last_message_at && thread.updated_time &&
+              new Date(existing.last_message_at).getTime() >= new Date(thread.updated_time).getTime()) {
+            conversationsSynced++;
+            continue;
+          }
+          // Fetch only the five newest messages for changed conversations.
           const messagesUrl = new URL("https://graph.facebook.com/" + API_VERSION + "/" + encodeURIComponent(String(thread.id)) + "/messages");
-          messagesUrl.searchParams.set("limit", "10");
+          messagesUrl.searchParams.set("limit", "5");
           messagesUrl.searchParams.set("fields", "id,created_time,from,to,message,attachments");
           const messagesResponse = await fetch(messagesUrl, { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(15000) });
           const messagesPayload = await messagesResponse.json().catch(() => ({}));
           if (!messagesResponse.ok) {
             console.warn("Meta conversation messages rejected", { conversation_id: String(thread.id), status: messagesResponse.status, code: messagesPayload?.error?.code, subcode: messagesPayload?.error?.error_subcode, message: String(messagesPayload?.error?.message || "").slice(0, 260) });
             errors.push("Messages for conversation " + String(thread.id) + ": " + providerError(messagesPayload));
+            const code = Number(messagesPayload?.error?.code);
+            if (code === 4 || code === 17 || code === 613 || code === 80006) break;
             continue;
           }
           const messages = Array.isArray(messagesPayload?.data) ? messagesPayload.data : [];
@@ -79,8 +94,6 @@ Deno.serve(async (req: Request) => {
           const latest = ordered[ordered.length - 1];
           const latestText = latest?.message || (latest?.attachments?.data?.length ? "Attachment" : "New message");
           const latestAt = latest?.created_time || thread.updated_time || new Date().toISOString();
-          const { data: existing } = await admin.from("inbox_conversations").select("id,unread_count,last_inbound_at")
-            .eq("social_account_id", account.id).eq("platform_conversation_id", String(other.id)).maybeSingle();
           const lastInbound = ordered.filter((m: any) => String(m?.from?.id || "") !== String(account.platform_user_id))
             .map((m: any) => m.created_time).filter(Boolean).sort().at(-1) || existing?.last_inbound_at || null;
           const { data: conversation, error: conversationError } = await admin.from("inbox_conversations").upsert({
