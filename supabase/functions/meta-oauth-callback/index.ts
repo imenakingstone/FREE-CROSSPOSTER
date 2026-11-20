@@ -99,7 +99,7 @@ Deno.serve(async (req: Request) => {
       ? permissionsData.data.filter((item: any) => item?.status === "granted" && typeof item?.permission === "string").map((item: any) => item.permission)
       : [];
     const accountUrl = new URL(`https://graph.facebook.com/${API_VERSION}/me/assigned_instagram_accounts`);
-    accountUrl.searchParams.set("fields", "id,username");
+    accountUrl.searchParams.set("fields", "id,username,profile_picture_url");
     accountUrl.searchParams.set("access_token", accessToken);
     const accountResponse = await fetch(accountUrl, { signal: AbortSignal.timeout(20000) });
     const accountData = await accountResponse.json().catch(() => ({}));
@@ -127,14 +127,18 @@ Deno.serve(async (req: Request) => {
     for (const account of accounts) {
       const accountId = String(account.id);
       let username = typeof account.username === "string" ? account.username : null;
+      let profilePictureUrl = typeof account.profile_picture_url === "string" ? account.profile_picture_url : null;
       if (!username) {
         try {
           const profileUrl = new URL(`https://graph.facebook.com/${API_VERSION}/${encodeURIComponent(accountId)}`);
-          profileUrl.searchParams.set("fields", "id,username");
+          profileUrl.searchParams.set("fields", "id,username,profile_picture_url");
           profileUrl.searchParams.set("access_token", accessToken);
           const profileResponse = await fetch(profileUrl, { signal: AbortSignal.timeout(15000) });
           const profileData = await profileResponse.json().catch(() => ({}));
-          if (profileResponse.ok && typeof profileData?.username === "string") username = profileData.username;
+          if (profileResponse.ok) {
+            if (typeof profileData?.username === "string") username = profileData.username;
+            if (typeof profileData?.profile_picture_url === "string") profilePictureUrl = profileData.profile_picture_url;
+          }
         } catch { /* Username is optional; account ID is sufficient for API calls. */ }
       }
       const payload = {
@@ -143,6 +147,7 @@ Deno.serve(async (req: Request) => {
         platform_user_id: accountId,
         username,
         display_name: username ? `@${username}` : "Instagram professional account",
+        profile_picture_url: profilePictureUrl,
         access_token_encrypted: encryptedToken,
         refresh_token_encrypted: null,
         token_expires_at: expiresAt,
