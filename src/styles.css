@@ -1129,3 +1129,15 @@ body,.dashboard,.socialync-shell{background:#030526;color:#f5f7ff}
 .ig-inbox-shell .inbox-conversation{content-visibility:auto;contain-intrinsic-size:1px 70px}
 .inbox-refresh{touch-action:manipulation}
 @media(max-width:720px){.ig-inbox-shell .inbox-conversation-list{max-height:230px}.ig-inbox-shell .inbox-chat-panel{min-height:420px}.ig-message-stream{min-height:280px}}
+
+/* Compact publishing archive cards */
+.history-post{padding:15px 0;border-bottom:1px solid rgba(119,145,255,.12)}
+.history-post:last-child{border-bottom:0}
+.history-post-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.history-post-heading>div{display:grid;gap:5px;min-width:0}
+.history-post-heading strong{color:#eef3ff;font-size:12px;line-height:1.55;overflow-wrap:anywhere}
+.history-post-heading span{color:#8392b9;font-size:9px}
+.history-destinations{display:grid;gap:7px;margin-top:10px;padding-left:10px}
+.history-destination{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;color:#aab6d5;font-size:10px}
+.history-destination .secondary-action{padding:6px 9px;font-size:9px}
+@media(max-width:560px){.history-post-heading{flex-direction:column}.history-destination{align-items:flex-start}}
