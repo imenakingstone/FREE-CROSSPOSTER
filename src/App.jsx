@@ -35,7 +35,7 @@ const navItems = [
   { id: 'create', label: 'Create post', icon: Plus },
   { id: 'calendar', label: 'Calendar', icon: CalendarDays },
   { id: 'history', label: 'Publishing history', icon: History },
-  { id: 'inbox', label: 'Unified inbox', icon: MessageSquare },
+  { id: 'inbox', label: 'Inbox', icon: MessageSquare },
   { id: 'accounts', label: 'Connected accounts', icon: Link2 },
   { id: 'settings', label: 'Settings', icon: Settings },
   { id: 'system-health', label: 'Admin Control Center', icon: Activity },
