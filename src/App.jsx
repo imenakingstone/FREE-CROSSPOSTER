@@ -434,7 +434,8 @@ export default function App() {
   }
   function closeAuth() {
     setShowAuth(false); setMode('login'); setNotice('')
-    if (window.history.state?.authView) window.history.back()
+    if (window.location.pathname.startsWith('/app/')) window.history.replaceState({}, '', '/')
+    else if (window.history.state?.authView) window.history.back()
   }
   async function handleSignOut() {
     const { error } = await supabase.auth.signOut()
@@ -442,7 +443,7 @@ export default function App() {
     await clearWorkspaceCache(session.user.id); setPosts([]); setSocialAccounts([]); setPostDestinations([]); setNotifications([]); setLogs([]); setSchedules([])
     setInboxConversations([]); setInboxMessages([]); setActiveConversationId(null)
     setShowAuth(false); setMode('login'); setActiveView('overview'); setNotice('')
-    window.history.replaceState({}, '', window.location.pathname)
+    window.history.replaceState({}, '', '/')
   }
 
   async function connectInstagram() {
