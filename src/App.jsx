@@ -625,7 +625,7 @@ export default function App() {
         {activeView === 'overview' && <Overview posts={posts} accounts={socialAccounts} schedules={schedules} logs={logs} onNavigate={setActiveView} />}
         {activeView === 'create' && <CreatePost caption={caption} setCaption={setCaption} file={file} setFile={setFile} selectedPlatforms={selectedPlatforms} setSelectedPlatforms={setSelectedPlatforms} editorSettings={editorSettings} setEditorSettings={setEditorSettings} platformSettings={platformSettings} setPlatformSettings={setPlatformSettings} onSubmit={publishNewPost} busy={busy} onOpenChatGPT={openChatGPTForHashtags} /> }
         {activeView === 'calendar' && <CalendarView posts={posts} schedules={schedules} onSchedule={schedulePost} onCancel={cancelSchedule} busy={busy} schedulePostId={schedulePostId} setSchedulePostId={setSchedulePostId} destinationId={scheduleDestinationId} setDestinationId={setScheduleDestinationId} scheduleAt={scheduleAt} setScheduleAt={setScheduleAt} destinations={destRows} />}
-        {activeView === 'history' && <HistoryView logs={logs} posts={posts} />}
+        {activeView === 'history' && <HistoryView logs={logs} posts={posts} destinations={postDestinations} onPublish={publishDestination} publishingPostId={publishingPostId} />}
         {activeView === 'inbox' && <InboxView conversations={inboxConversations} messages={inboxMessages} activeId={activeConversationId} onSelect={selectInboxConversation} draft={inboxDraft} setDraft={setInboxDraft} onSend={sendInboxMessage} loading={inboxLoading} sending={inboxSending} accounts={socialAccounts} onRefresh={async()=>{setInboxLoading(true);try{await syncInstagramInbox();await loadInboxConversations();if(activeConversationId)await loadInboxMessages(activeConversationId);setInboxLastSynced(new Date())}catch(error){setNotice(error.message||'Instagram inbox sync failed.')}finally{setInboxLoading(false)}}} onDiagnose={diagnoseInstagramInbox} diagnostic={inboxDiagnostic} diagnosticLoading={inboxDiagnosticLoading} isAdmin={session.user.email?.toLowerCase() === 'imenaking12@gmail.com'} lastSynced={inboxLastSynced} />}
         {activeView === 'accounts' && <Accounts accounts={socialAccounts} onConnect={connectInstagram} onConnectTikTok={() => connectPlatform('tiktok')} onDisconnect={disconnectAccount} busy={busy} />}
         {activeView === 'settings' && <SettingsView profile={profile} setProfile={setProfile} settings={settings} setSettings={setSettings} onProfileSave={saveProfile} onSettingsSave={saveSettings} onPasswordReset={sendPasswordReset} busy={busy} email={session.user.email} />}
@@ -951,9 +951,36 @@ function CalendarView({posts,schedules,onSchedule,onCancel,busy,schedulePostId,s
   </>
 }
 
-function HistoryView({logs,posts}) {
-  const postMap=new Map(posts.map(p=>[p.id,p]))
-  return <><PageHeader eyebrow="ACTIVITY" title="Publishing history." description="Review publishing events and errors recorded by connected platforms."/><section className="card"><div className="history-list">{logs.map(log=><div className="simple-row" key={log.id}><div><strong>{postMap.get(log.post_id)?.caption||'Post activity'} · {log.platform}</strong><span>{new Date(log.created_at).toLocaleString()} · {log.message||'No additional details'}</span></div><span className={'draft-status '+(log.status==='published'?'success-status':'')}>{log.status}</span></div>)}{!logs.length&&<div className="empty-state">No publishing events have been recorded yet.</div>}</div></section></>
+function HistoryView({logs,posts,destinations,onPublish,publishingPostId}) {
+  const postMap=new Map(posts.map(post=>[post.id,post]))
+  return <>
+    <PageHeader eyebrow="ACTIVITY" title="Publishing history." description="Your post captions, publishing dates, destination statuses and platform references."/>
+    <section className="card">
+      <div className="history-list">
+        {posts.map(post=>{
+          const targets=destinations.filter(item=>item.post_id===post.id)
+          return <article className="history-post" key={post.id}>
+            <div className="history-post-heading">
+              <div><strong>{post.caption||'Media post'}</strong><span>{new Date(post.created_at).toLocaleString()} · {post.media_type||'Text post'}</span></div>
+              <span className={'draft-status '+(post.status==='published'?'success-status':'')}>{post.status||'recorded'}</span>
+            </div>
+            <div className="history-destinations">
+              {targets.map(destination=><div className="history-destination" key={destination.id}>
+                <span><b>{destination.platform}</b> · {destination.status}{destination.platform_post_id?' · ID '+destination.platform_post_id:''}</span>
+                {['failed','pending'].includes(destination.status)&&<button className="secondary-action" onClick={()=>onPublish(post.id,destination.id,destination.platform)} disabled={publishingPostId===post.id}>{publishingPostId===post.id?'Retrying…':'Retry publish'}</button>}
+              </div>)}
+              {!targets.length&&<span className="muted tiny">No destination records.</span>}
+            </div>
+          </article>
+        })}
+        {!posts.length&&<div className="empty-state">No posts have been created yet.</div>}
+      </div>
+    </section>
+    <section className="card">
+      <div className="section-heading"><div><h2>Recent publishing events</h2><p className="muted small">Platform responses and delivery events</p></div></div>
+      <div className="history-list">{logs.map(log=><div className="simple-row" key={log.id}><div><strong>{postMap.get(log.post_id)?.caption||'Post activity'} · {log.platform}</strong><span>{new Date(log.created_at).toLocaleString()} · {log.message||'No additional details'}</span></div><span className={'draft-status '+(log.status==='published'?'success-status':'')}>{log.status}</span></div>)}{!logs.length&&<div className="empty-state">No publishing events have been recorded yet.</div>}</div>
+    </section>
+  </>
 }
 function Accounts({accounts,onConnect,onConnectTikTok,onDisconnect,busy}) {
   const instagramAccounts=accounts.filter(a=>a.platform==='instagram'&&a.environment==='production');
