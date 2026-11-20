@@ -1001,9 +1001,9 @@ function Accounts({accounts,onConnect,onConnectTikTok,onDisconnect,busy}) {
   </>
 }
 function renderInboxText(value) {
-  const parts = String(value || '').split(/(https?:\\/\\/[^\\s]+)/g)
+  const parts = String(value || '').split(/(https?:\/\/[^\s]+)/g)
   return parts.map((part, index) => {
-    if (!/^https?:\\/\\//i.test(part)) return part
+    if (!/^https?:\/\//i.test(part)) return part
     const href = part.replace(/[),.!?]+$/, '')
     const suffix = part.slice(href.length)
     return <span key={index}><a href={href} target="_blank" rel="noopener noreferrer">{href}</a>{suffix}</span>
@@ -1012,11 +1012,11 @@ function renderInboxText(value) {
 function InboxAttachment({ attachment }) {
   const url = attachment?.image_data?.url || attachment?.video_data?.url ||
     attachment?.file_url || attachment?.url || attachment?.payload?.url || ''
-  if (!url || !/^https?:\\/\\//i.test(url)) {
+  if (!url || !/^https?:\/\//i.test(url)) {
     return <small className="inbox-attachment-note">Attachment shared · preview unavailable</small>
   }
   const type = String(attachment?.type || attachment?.mime_type || '').toLowerCase()
-  const isImage = type.includes('image') || /\\.(png|jpe?g|gif|webp)(\\?|$)/i.test(url)
+  const isImage = type.includes('image') || /\.(png|jpe?g|gif|webp)(\?|$)/i.test(url)
   if (isImage) return <a href={url} target="_blank" rel="noopener noreferrer"><img className="inbox-inline-image" src={url} alt="Instagram message attachment" loading="lazy" referrerPolicy="no-referrer"/></a>
   return <a className="inbox-attachment-link" href={url} target="_blank" rel="noopener noreferrer">Open {type.includes('video') ? 'video' : 'attachment'} ↗</a>
 }
