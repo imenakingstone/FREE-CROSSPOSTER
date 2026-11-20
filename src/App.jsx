@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
+import { getWorkspaceCache, setWorkspaceCache, clearWorkspaceCache } from './lib/workspaceCache'
 import { LayoutDashboard, CalendarDays, FileText, History, Link2, Settings, LogOut, ImagePlus, Send, ShieldCheck, Video, Trash2, Clock3, Plus, Save, X, RefreshCw, Bell, CheckCheck, Activity, MessageSquare, Search, SlidersHorizontal, Scissors, MapPin, EyeOff, MessageCircle, Crop, Sparkles, ChevronDown, Film, Check, Globe, Users, Play, RotateCcw, Camera } from 'lucide-react'
 
 function CrossposterLogo() { return <span className="brand-icon crossposter-logo" aria-label="FREE CROSSPOSTER"><img src="/crossposter.svg" alt="" /></span> }
@@ -25,7 +26,6 @@ const navItems = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'create', label: 'Create post', icon: Plus },
   { id: 'calendar', label: 'Calendar', icon: CalendarDays },
-  { id: 'drafts', label: 'Drafts', icon: FileText },
   { id: 'history', label: 'Publishing history', icon: History },
   { id: 'inbox', label: 'Unified inbox', icon: MessageSquare },
   { id: 'accounts', label: 'Connected accounts', icon: Link2 },
@@ -101,7 +101,13 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (session?.user) refreshWorkspace()
+    if (!session?.user?.id) return
+    let active = true
+    ;(async () => {
+      await hydrateWorkspaceCache(session.user.id)
+      if (active) await refreshWorkspace()
+    })()
+    return () => { active = false }
   }, [session?.user?.id])
   useEffect(() => {
     if (!session?.user?.id) return
@@ -174,6 +180,20 @@ export default function App() {
     return () => { window.clearInterval(timer) }
   }, [activeConversationId, activeView])
 
+  async function hydrateWorkspaceCache(userId) {
+    const keys = ['posts','accounts','destinations','notifications','logs','schedules','profile','settings']
+    const values = await Promise.all(keys.map(key => getWorkspaceCache(userId, key)))
+    if (session?.user?.id !== userId) return
+    const cached = Object.fromEntries(keys.map((key, index) => [key, values[index]]))
+    if (cached.posts) setPosts(cached.posts)
+    if (cached.accounts) setSocialAccounts(cached.accounts)
+    if (cached.destinations) setPostDestinations(cached.destinations)
+    if (cached.notifications) setNotifications(cached.notifications)
+    if (cached.logs) setLogs(cached.logs)
+    if (cached.schedules) setSchedules(cached.schedules)
+    if (cached.profile) setProfile(cached.profile)
+    if (cached.settings) setSettings(cached.settings)
+  }
   async function refreshWorkspace() {
     await Promise.all([loadPosts(), loadAccounts(), loadDestinations(), loadNotifications(), loadLogs(), loadSchedules(), loadProfile(), loadSettings()])
   }
@@ -257,23 +277,32 @@ export default function App() {
   }
   async function loadInboxConversations() {
     if (!session?.user?.id) return
+    if (!inboxConversations.length) {
+      const cached = await getWorkspaceCache(session.user.id, 'inbox-conversations')
+      if (cached?.length && session?.user?.id) { setInboxConversations(cached); if (!activeConversationId) setActiveConversationId(cached[0].id) }
+    }
     const { data, error } = await supabase.from('inbox_conversations')
       .select('id,platform,social_account_id,participant_id,participant_name,participant_username,last_message_text,last_message_at,last_inbound_at,unread_count,status')
       .eq('user_id', session.user.id).eq('platform', 'instagram').order('last_message_at', { ascending: false }).limit(20)
     if (error) { setNotice(error.message); return }
     setInboxConversations(data || [])
+    await setWorkspaceCache(session.user.id, 'inbox-conversations', data || [])
     if (!activeConversationId && data?.length) setActiveConversationId(data[0].id)
     if (activeConversationId && !data?.some(item => item.id === activeConversationId)) setActiveConversationId(data?.[0]?.id || null)
   }
   async function loadInboxMessages(conversationId) {
     const requestId = ++inboxMessageRequest.current
+    if (conversationId && !inboxMessages.length) {
+      const cached = await getWorkspaceCache(session.user.id, 'inbox-messages:' + conversationId)
+      if (cached && requestId === inboxMessageRequest.current && activeConversationId === conversationId) setInboxMessages(cached)
+    }
     if (!conversationId) { setInboxMessages([]); return }
     const { data, error } = await supabase.from('inbox_messages')
       .select('id,conversation_id,platform_message_id,direction,sender_id,message_text,attachments,delivery_status,sent_at')
       .eq('conversation_id', conversationId).order('sent_at', { ascending: true }).limit(200)
     // Ignore late responses from a chat the user has already switched away from.
     if (requestId !== inboxMessageRequest.current || activeConversationId !== conversationId) return
-    if (error) setNotice(error.message); else setInboxMessages(data || [])
+    if (error) setNotice(error.message); else { setInboxMessages(data || []); await setWorkspaceCache(session.user.id, 'inbox-messages:' + conversationId, data || []) }
   }
   async function selectInboxConversation(conversation) {
     setActiveConversationId(conversation.id)
@@ -303,19 +332,19 @@ export default function App() {
   }
   async function loadPosts() {
     const { data, error } = await supabase.from('posts').select('id,caption,media_path,media_type,original_filename,status,created_at,updated_at').order('created_at', { ascending: false }).limit(100)
-    if (error) setNotice(error.message); else setPosts(data || [])
+    if (error) setNotice(error.message); else { setPosts(data || []); await setWorkspaceCache(session.user.id, 'posts', data || []) }
   }
   async function loadAccounts() {
     const { data, error } = await supabase.from('social_accounts').select('id,platform,platform_user_id,username,display_name,account_status,token_expires_at,connected_at,environment').eq('environment', 'production').order('connected_at', { ascending: false })
-    if (error) setNotice(error.message); else setSocialAccounts(data || [])
+    if (error) setNotice(error.message); else { setSocialAccounts(data || []); await setWorkspaceCache(session.user.id, 'accounts', data || []) }
   }
   async function loadDestinations() {
     const { data, error } = await supabase.from('post_destinations').select('id,post_id,platform,status,social_account_id,platform_post_id,published_at,error_message').order('created_at', { ascending: false }).limit(300)
-    if (error) setNotice(error.message); else setPostDestinations(data || [])
+    if (error) setNotice(error.message); else { setPostDestinations(data || []); await setWorkspaceCache(session.user.id, 'destinations', data || []) }
   }
   async function loadNotifications() {
     const { data, error } = await supabase.from('notifications').select('id,type,title,body,read_at,created_at,related_post_id').order('created_at', { ascending: false }).limit(25)
-    if (error) { if (!error.message?.includes('not find')) setNotice(error.message) } else setNotifications(data || [])
+    if (error) { if (!error.message?.includes('not find')) setNotice(error.message) } else { setNotifications(data || []); await setWorkspaceCache(session.user.id, 'notifications', data || []) }
   }
   async function markNotificationRead(item) {
     if (!item.read_at) {
@@ -329,19 +358,19 @@ export default function App() {
   }
   async function loadLogs() {
     const { data, error } = await supabase.from('publishing_logs').select('id,post_id,destination_id,platform,status,message,created_at').order('created_at', { ascending: false }).limit(100)
-    if (!error) setLogs(data || [])
+    if (!error) { setLogs(data || []); await setWorkspaceCache(session.user.id, 'logs', data || []) }
   }
   async function loadSchedules() {
     const { data, error } = await supabase.from('scheduled_posts').select('id,destination_id,scheduled_at,status').order('scheduled_at', { ascending: true })
-    if (!error) setSchedules(data || [])
+    if (!error) { setSchedules(data || []); await setWorkspaceCache(session.user.id, 'schedules', data || []) }
   }
   async function loadProfile() {
     const { data } = await supabase.from('profiles').select('display_name,avatar_url').eq('id', session.user.id).maybeSingle()
-    if (data) setProfile({ display_name: data.display_name || '', avatar_url: data.avatar_url || '' })
+    if (data) { const next = { display_name: data.display_name || '', avatar_url: data.avatar_url || '' }; setProfile(next); await setWorkspaceCache(session.user.id, 'profile', next) }
   }
   async function loadSettings() {
     const { data } = await supabase.from('user_settings').select('timezone,email_notifications,publish_success_notifications,publish_failure_notifications,weekly_summary').eq('user_id', session.user.id).maybeSingle()
-    if (data) setSettings(data)
+    if (data) { setSettings(data); await setWorkspaceCache(session.user.id, 'settings', data) }
   }
 
   async function handleAuth(event) {
@@ -387,7 +416,7 @@ export default function App() {
   async function handleSignOut() {
     const { error } = await supabase.auth.signOut()
     if (error) { setNotice(error.message || 'Could not sign out.'); return }
-    setPosts([]); setSocialAccounts([]); setPostDestinations([]); setNotifications([]); setLogs([]); setSchedules([])
+    await clearWorkspaceCache(session.user.id); setPosts([]); setSocialAccounts([]); setPostDestinations([]); setNotifications([]); setLogs([]); setSchedules([])
     setInboxConversations([]); setInboxMessages([]); setActiveConversationId(null)
     setShowAuth(false); setMode('login'); setActiveView('overview'); setNotice('')
     window.history.replaceState({}, '', window.location.pathname)
@@ -450,13 +479,18 @@ export default function App() {
     }
   }
 
-  async function createDraft(event, nextEditorSettings = editorSettings, nextPlatformSettings = platformSettings, preparedFile = file) {
+  async function publishNewPost(event, nextEditorSettings = editorSettings, nextPlatformSettings = platformSettings, preparedFile = file) {
     event.preventDefault()
     if (!caption.trim() && !preparedFile) return setNotice('Add a caption or choose a photo/video first.')
     if (!selectedPlatforms.length) return setNotice('Choose at least one destination.')
-    setBusy(true); setNotice('')
+    const targets = selectedPlatforms.flatMap(platform => socialAccounts.filter(item => item.platform === platform && item.account_status === 'connected').map(account => ({ platform, account })))
+    if (!targets.length) return setNotice('Connect at least one selected social account before publishing.')
+    if (targets.length !== selectedPlatforms.length) return setNotice('Connect an account for every selected platform before publishing.')
+    if (selectedPlatforms.includes('tiktok') && (!preparedFile || !preparedFile.type.startsWith('video/'))) return setNotice('TikTok publishing currently requires a video.')
+    setBusy(true); setNotice('Uploading media and preparing your post…')
+    let mediaPath = null
     try {
-      let mediaPath = null, mediaType = null
+      let mediaType = null
       if (preparedFile) {
         const allowed = ['image/jpeg','image/png','image/webp','image/gif','video/mp4','video/quicktime','video/webm']
         if (!allowed.includes(preparedFile.type)) throw new Error('This file format is not supported.')
@@ -467,39 +501,50 @@ export default function App() {
         if (error) throw error
         mediaType = preparedFile.type.startsWith('video/') ? 'video' : 'image'
       }
-      const { data: post, error: postError } = await supabase.from('posts').insert({ user_id: session.user.id, caption: caption.trim(), media_path: mediaPath, media_type: mediaType, original_filename: preparedFile?.name || null, status: 'draft', editor_settings: nextEditorSettings, platform_settings: nextPlatformSettings }).select('id').single()
+      const { data: post, error: postError } = await supabase.from('posts').insert({
+        user_id: session.user.id, caption: caption.trim(), media_path: mediaPath, media_type: mediaType,
+        original_filename: preparedFile?.name || null, status: 'draft',
+        editor_settings: nextEditorSettings, platform_settings: nextPlatformSettings
+      }).select('id').single()
       if (postError) throw postError
-      const destinations = selectedPlatforms.flatMap(platform => {
-        const linkedAccounts = socialAccounts.filter(item => item.platform === platform && item.account_status === 'connected')
-        return linkedAccounts.length
-          ? linkedAccounts.map(account => ({ post_id: post.id, user_id: session.user.id, platform, social_account_id: account.id, status: 'pending' }))
-          : [{ post_id: post.id, user_id: session.user.id, platform, social_account_id: null, status: 'pending' }]
-      })
+      const destinations = targets.map(({ platform, account }) => ({
+        post_id: post.id, user_id: session.user.id, platform, social_account_id: account.id, status: 'pending'
+      }))
       const { error: destinationError } = await supabase.from('post_destinations').insert(destinations)
       if (destinationError) throw destinationError
       setCaption(''); setFile(null); setSelectedPlatforms(['instagram'])
-      setNotice('Draft saved successfully.'); await refreshWorkspace(); setActiveView('drafts')
-    } catch (error) { setNotice(error.message || 'Could not save this draft.') }
-    finally { setBusy(false) }
-  }
-  async function deleteDraft(post) {
-    if (!window.confirm('Delete this post and its destinations?')) return
-    setBusy(true)
-    try {
-      const { data: linkedDestinations } = await supabase.from('post_destinations').select('id').eq('post_id', post.id).eq('user_id', session.user.id)
-      const linkedIds = (linkedDestinations || []).map(item => item.id)
-      if (linkedIds.length) await supabase.from('scheduled_posts').delete().in('destination_id', linkedIds).eq('user_id', session.user.id)
-      await supabase.from('post_destinations').delete().eq('post_id', post.id).eq('user_id', session.user.id)
-      const { error } = await supabase.from('posts').delete().eq('id', post.id).eq('user_id', session.user.id)
-      if (error) throw error
-      if (post.media_path) await supabase.storage.from('user-media').remove([post.media_path])
-      setNotice('Post deleted.'); await refreshWorkspace()
-    } catch (error) { setNotice(error.message || 'Could not delete post.') }
-    finally { setBusy(false) }
-  }
-  async function saveCaption(postId, nextCaption) {
-    const { error } = await supabase.from('posts').update({ caption: nextCaption, updated_at: new Date().toISOString() }).eq('id', postId).eq('user_id', session.user.id)
-    if (error) setNotice(error.message); else { setNotice('Draft updated.'); await loadPosts() }
+      let succeeded = 0
+      const failures = []
+      for (const destination of destinations) {
+        setNotice(`Publishing to ${destination.platform}…`)
+        try {
+          const { data, error } = await supabase.functions.invoke(destination.platform + '-publish', { body: { post_id: post.id, destination_id: destination.id } })
+          if (error) {
+            let details = null
+            try { details = await error.context?.json() } catch {}
+            throw new Error(details?.error || data?.error || error.message || 'Publishing failed.')
+          }
+          if (data?.error || data?.status === 'failed') throw new Error(data?.error || data?.fail_reason || 'The platform rejected this post.')
+          succeeded++
+        } catch (error) { failures.push(destination.platform + ': ' + (error.message || 'Publishing failed.')) }
+      }
+      const { data: finalDestinations } = await supabase.from('post_destinations').select('status').eq('post_id', post.id).eq('user_id', session.user.id)
+      const allPublished = finalDestinations?.length && finalDestinations.every(item => item.status === 'published')
+      if (allPublished) {
+        if (mediaPath) await supabase.storage.from('user-media').remove([mediaPath])
+        await supabase.from('posts').update({ media_path: null, updated_at: new Date().toISOString() }).eq('id', post.id).eq('user_id', session.user.id)
+        setNotice('Published successfully. Your caption and publishing details are saved in Publishing history.')
+      } else if (failures.length) {
+        setNotice(`Published to ${succeeded} of ${destinations.length} destinations. ${failures.join(' · ')} The media is retained because at least one destination did not complete.`)
+      } else {
+        setNotice('The platform accepted your post for processing. Check Publishing history for its final status.')
+      }
+      await refreshWorkspace()
+      setActiveView('history')
+    } catch (error) {
+      if (mediaPath) await supabase.storage.from('user-media').remove([mediaPath])
+      setNotice(error.message || 'Could not publish this post.')
+    } finally { setBusy(false) }
   }
   async function schedulePost(event) {
     event.preventDefault()
@@ -555,7 +600,6 @@ export default function App() {
   }
 
   const destinations = useMemo(() => posts.map(post => ({ post, items: [] })), [posts])
-  const draftPosts = posts.filter(post => post.status !== 'published')
   const selectedPostDestinations = posts.find(post => post.id === schedulePostId)
   const [destRows, setDestRows] = useState([])
   useEffect(() => {
@@ -579,8 +623,7 @@ export default function App() {
       <header className="topbar"><div><span className="topbar-kicker">YOUR WORKSPACE</span><strong>{activeTitle}</strong></div><div className="user-area"><span className="user-email">{session.user.email}</span><div className="notification-wrap"><button className="icon-btn notification-trigger" onClick={()=>setNotificationOpen(v=>!v)} title="Notifications"><Bell size={17}/>{notifications.some(n=>!n.read_at)&&<i/>}</button>{notificationOpen&&<div className="notification-panel"><div className="notification-heading"><strong>Notifications</strong><button onClick={markAllNotificationsRead}><CheckCheck size={13}/> Mark all read</button></div>{notifications.map(item=><button key={item.id} className={'notification-item '+(!item.read_at?'unread':'')} onClick={()=>markNotificationRead(item)}><strong>{item.title}</strong><span>{item.body}</span><small>{new Date(item.created_at).toLocaleString()}</small></button>)}{!notifications.length&&<p className="empty-state">No notifications yet.</p>}</div>}</div><button className="icon-btn" onClick={refreshWorkspace} title="Refresh workspace"><RefreshCw size={17}/></button></div></header>
       <div className="dashboard-content">
         {activeView === 'overview' && <Overview posts={posts} accounts={socialAccounts} schedules={schedules} logs={logs} onNavigate={setActiveView} />}
-        {activeView === 'create' && <CreatePost caption={caption} setCaption={setCaption} file={file} setFile={setFile} selectedPlatforms={selectedPlatforms} setSelectedPlatforms={setSelectedPlatforms} editorSettings={editorSettings} setEditorSettings={setEditorSettings} platformSettings={platformSettings} setPlatformSettings={setPlatformSettings} onSubmit={createDraft} busy={busy} onOpenChatGPT={openChatGPTForHashtags} /> }
-        {activeView === 'drafts' && <Drafts posts={draftPosts} destinations={postDestinations} accounts={socialAccounts} onDelete={deleteDraft} onSave={saveCaption} onPublish={publishDestination} onAssignAccount={assignDestinationAccount} publishingPostId={publishingPostId} />}
+        {activeView === 'create' && <CreatePost caption={caption} setCaption={setCaption} file={file} setFile={setFile} selectedPlatforms={selectedPlatforms} setSelectedPlatforms={setSelectedPlatforms} editorSettings={editorSettings} setEditorSettings={setEditorSettings} platformSettings={platformSettings} setPlatformSettings={setPlatformSettings} onSubmit={publishNewPost} busy={busy} onOpenChatGPT={openChatGPTForHashtags} /> }
         {activeView === 'calendar' && <CalendarView posts={posts} schedules={schedules} onSchedule={schedulePost} onCancel={cancelSchedule} busy={busy} schedulePostId={schedulePostId} setSchedulePostId={setSchedulePostId} destinationId={scheduleDestinationId} setDestinationId={setScheduleDestinationId} scheduleAt={scheduleAt} setScheduleAt={setScheduleAt} destinations={destRows} />}
         {activeView === 'history' && <HistoryView logs={logs} posts={posts} />}
         {activeView === 'inbox' && <InboxView conversations={inboxConversations} messages={inboxMessages} activeId={activeConversationId} onSelect={selectInboxConversation} draft={inboxDraft} setDraft={setInboxDraft} onSend={sendInboxMessage} loading={inboxLoading} sending={inboxSending} accounts={socialAccounts} onRefresh={async()=>{setInboxLoading(true);try{await syncInstagramInbox();await loadInboxConversations();if(activeConversationId)await loadInboxMessages(activeConversationId);setInboxLastSynced(new Date())}catch(error){setNotice(error.message||'Instagram inbox sync failed.')}finally{setInboxLoading(false)}}} onDiagnose={diagnoseInstagramInbox} diagnostic={inboxDiagnostic} diagnosticLoading={inboxDiagnosticLoading} isAdmin={session.user.email?.toLowerCase() === 'imenaking12@gmail.com'} lastSynced={inboxLastSynced} />}
@@ -848,48 +891,10 @@ function CreatePost({caption,setCaption,file,setFile,selectedPlatforms,setSelect
           <div className="creator-destination-option is-unavailable"><span className="creator-destination-icon facebook"><span>f</span></span><span><b>Facebook</b><small>Meta Page connection required</small></span><span className="creator-lock">SOON</span></div>
           <div className="creator-destination-note">Your media is uploaded privately to your workspace. Each connected destination is tracked separately.</div>
         </section>
-        <section className="creator-card creator-save-card"><span className="creator-save-icon"><CrossposterLogo/></span><h3>Ready to route your post?</h3><p>Save the source post and its platform-specific settings as a draft. Publish when the destination is connected and supported.</p><button className="creator-save-button" disabled={busy||preparing}>{preparing?'Preparing media…':busy?'Saving draft…':'Save as draft'} <Send size={15}/></button><span className="creator-save-foot"><ShieldCheck size={13}/> Your draft stays private</span></section>
+        <section className="creator-card creator-save-card"><span className="creator-save-icon"><CrossposterLogo/></span><h3>Ready to route your post?</h3><p>Publish directly to the connected accounts you selected. We keep a lightweight publishing record instead of a saved draft.</p><button className="creator-save-button" disabled={busy||preparing}>{preparing?'Preparing media…':busy?'Publishing…':'Publish now'} <Send size={15}/></button><span className="creator-save-foot"><ShieldCheck size={13}/> Media is temporary; post details stay in history</span></section>
       </aside>
     </form>
   </section>
-}
-function Drafts({posts,destinations,accounts,onDelete,onSave,onPublish,onAssignAccount,publishingPostId}) {
-  const [edits,setEdits]=useState({})
-  return <>
-    <PageHeader eyebrow="CONTENT LIBRARY" title="Drafts." description="Edit captions, assign each destination account and publish."/>
-    <section className="card"><div className="draft-list">
-      {posts.map(post=>{
-        const targets=destinations.filter(item=>item.post_id===post.id&&['instagram','tiktok'].includes(item.platform))
-        return <article className="draft-editor" key={post.id}>
-          <textarea rows="3" value={edits[post.id]??post.caption} onChange={event=>setEdits(value=>({...value,[post.id]:event.target.value}))}/>
-          <div className="draft-editor-footer"><span>{post.media_type||'Text post'} · {new Date(post.created_at).toLocaleDateString()} · {post.status}</span>
-            <div className="button-row">
-              <button className="secondary-action" onClick={()=>onSave(post.id,edits[post.id]??post.caption)}><Save size={14}/> Save</button>
-              {targets.map(destination=>{
-                const platform=destination.platform
-                const linked=accounts.filter(item=>item.platform===platform&&item.account_status==='connected')
-                const account=accounts.find(item=>item.id===destination.social_account_id&&item.account_status==='connected')
-                const label=platform==='instagram'?'Instagram':'TikTok'
-                return <div className="draft-target" key={destination.id}>
-                  {account?<span className="draft-target-name">{account.username?'@'+account.username:account.display_name||label}</span>
-                  :<select aria-label={'Choose '+label+' account'} value="" onChange={event=>event.target.value&&onAssignAccount(destination.id,event.target.value)} disabled={!linked.length}>
-                    <option value="">{linked.length?'Choose '+label+' account…':'Connect '+label+' first'}</option>
-                    {linked.map(item=><option key={item.id} value={item.id}>{item.username?'@'+item.username:item.display_name||item.platform_user_id}</option>)}
-                  </select>}
-                  {destination.status==='published'?<span className="draft-status success-status">Published</span>
-                  :destination.status==='scheduled'||destination.status==='processing'||destination.status==='publishing'?<span className="draft-status">{destination.status}</span>
-                  :<button className="secondary-action" onClick={()=>onPublish(post.id,destination.id,platform)} disabled={publishingPostId===post.id||!account||(platform==='tiktok'&&post.media_type!=='video')} title={platform==='tiktok'&&post.media_type!=='video'?'TikTok Direct Post currently supports video only.':''}>{publishingPostId===post.id?'Publishing…':'Publish '+label}</button>}
-                </div>
-              })}
-              {!targets.length&&<span className="muted tiny">No destinations selected</span>}
-              <button className="danger-action" onClick={()=>onDelete(post)}><Trash2 size={14}/> Delete</button>
-            </div>
-          </div>
-        </article>
-      })}
-      {!posts.length&&<div className="empty-state">No drafts to show.</div>}
-    </div></section>
-  </>
 }
 function CalendarView({posts,schedules,onSchedule,onCancel,busy,schedulePostId,setSchedulePostId,destinationId,setDestinationId,scheduleAt,setScheduleAt,destinations}) {
   const [scheduleRows,setScheduleRows]=useState([])
@@ -917,9 +922,9 @@ function CalendarView({posts,schedules,onSchedule,onCancel,busy,schedulePostId,s
       <section className="card">
         <h2>Schedule a post</h2>
         <form onSubmit={onSchedule}>
-          <label>Choose a draft
+          <label>Choose a post to schedule
             <select required value={schedulePostId} onChange={event=>{setSchedulePostId(event.target.value);setDestinationId('')}}>
-              <option value="">Select a draft…</option>
+              <option value="">Select a post…</option>
               {posts.filter(post=>post.status!=='published').map(post=><option key={post.id} value={post.id}>{(post.caption||'Media-only post').slice(0,65)}</option>)}
             </select>
           </label>
@@ -1137,7 +1142,7 @@ function LandingPage({ onGetStarted, onSignIn }) {
     <section className="landing-section" id="features"><div className="landing-section-heading"><span className="landing-eyebrow">LESS CHAOS, MORE CREATING</span><h2>Everything you need to stay<br/><em>consistent online.</em></h2><p>A practical toolkit for planning and publishing without juggling a dozen tabs.</p></div>
       <div className="landing-feature-grid">
         <article className="landing-feature feature-lime"><span className="feature-symbol">▤</span><h3>One content studio</h3><p>Prepare captions and upload photos or videos, then choose the channels you want to target.</p><small>CREATE · ORGANIZE · PUBLISH</small></article>
-        <article className="landing-feature feature-violet"><span className="feature-symbol">▦</span><h3>Plan ahead</h3><p>Keep drafts and publishing activity organized, with a calendar for supported scheduled posts.</p><small>CALENDAR · DRAFTS · HISTORY</small></article>
+        <article className="landing-feature feature-violet"><span className="feature-symbol">▦</span><h3>Plan ahead</h3><p>Track published posts and schedule supported posts from one calendar.</p><small>CALENDAR · HISTORY</small></article>
         <article className="landing-feature feature-blue"><span className="feature-symbol">↗</span><h3>Work with your tools</h3><p>Open ChatGPT in a separate tab when you want writing ideas, using your own account without connecting a paid API.</p><small>OPTIONAL · NO API KEY</small></article>
       </div>
     </section>
