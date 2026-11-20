@@ -1053,3 +1053,67 @@ body,.dashboard,.socialync-shell{background:#030526;color:#f5f7ff}
 .instagram-connect-accounts .channel-row>span{display:flex;align-items:center;gap:8px}
 .accounts-secondary-grid{margin-top:20px}
 @media(max-width:720px){.instagram-connect-card{grid-template-columns:1fr;gap:14px;padding:22px}.instagram-connect-art{min-height:150px}.instagram-connect-orbit{width:138px;height:138px}.instagram-connect-orbit.orbit-b{width:105px;height:105px}.instagram-connect-logo{width:74px;height:74px;border-radius:23px}.instagram-connect-logo .platform-logo{width:40px;height:40px}.instagram-connect-features{display:grid;gap:9px}.instagram-connect-button{width:100%}.instagram-connect-privacy{align-items:flex-start;line-height:1.5}}
+
+
+/* Instagram-inspired inbox layout and conversation ergonomics */
+.inbox-shell.ig-inbox-shell{grid-template-columns:minmax(290px,360px) minmax(0,1fr);min-height:680px;background:#101116;border:1px solid #292a31;border-radius:16px}
+.ig-inbox-shell .inbox-list-panel{background:#111216;border-color:#292a31}
+.ig-inbox-shell .inbox-list-heading{padding:20px 18px 15px}
+.inbox-list-heading>div{display:flex;align-items:center;gap:10px}
+.inbox-list-heading .inbox-count{font-size:11px;color:#aeb0b8;background:#292a31;border-radius:20px;padding:3px 8px}
+.inbox-account-strip{display:flex;align-items:center;gap:10px;padding:12px 17px;border-top:1px solid #25262c;border-bottom:1px solid #25262c}
+.inbox-instagram-mark{width:34px;height:34px;display:grid;place-items:center;border-radius:11px;background:linear-gradient(135deg,#833ab4,#e1306c,#fcb045);color:#fff}
+.inbox-instagram-mark .platform-logo{width:18px;height:18px}
+.inbox-account-strip>div{display:flex;flex:1;min-width:0;flex-direction:column;gap:3px}
+.inbox-account-strip strong{font-size:11px;color:#f3f3f5}
+.inbox-account-strip small{font-size:9px;color:#858792}
+.inbox-account-strip>i{width:7px;height:7px;border-radius:50%;background:#36c98f;box-shadow:0 0 10px #36c98f}
+.inbox-search{display:flex;align-items:center;gap:9px;margin:13px 14px 8px;padding:10px 11px;border-radius:10px;background:#202127;color:#888b96}
+.inbox-search input{width:100%;min-width:0;border:0;outline:0;background:transparent;color:#f4f4f6;font-size:11px}
+.inbox-search input::placeholder{color:#858792}
+.ig-inbox-shell .inbox-conversation-list{max-height:590px;flex:1}
+.ig-inbox-shell .inbox-conversation{gap:11px;padding:13px 15px;border-bottom:1px solid #24252b;transition:background .15s ease}
+.ig-inbox-shell .inbox-conversation:hover{background:#1b1c22}
+.ig-inbox-shell .inbox-conversation.active{background:#24252d;box-shadow:inset 3px 0 #d94687}
+.ig-inbox-shell .inbox-avatar{width:44px;height:44px;border-radius:50%;font-size:12px;font-weight:800;letter-spacing:.3px;background:linear-gradient(145deg,#7445a5,#e34d77 58%,#f4a14d);border:1px solid rgba(255,255,255,.13)}
+.ig-inbox-shell .inbox-conversation-copy strong{font-size:11px;color:#f4f4f6}
+.ig-inbox-shell .inbox-conversation-copy small{font-size:10px;color:#9b9da7;max-width:185px}
+.ig-inbox-shell .inbox-conversation-meta small{font-size:9px;color:#858792;white-space:nowrap}
+.ig-chat-header{min-height:76px;padding:13px 20px;background:#111216;border-bottom:1px solid #292a31}
+.ig-chat-header>.inbox-avatar{width:42px;height:42px;border-radius:50%}
+.ig-chat-identity{display:flex;flex:1;min-width:0;flex-direction:column;gap:4px}
+.ig-chat-identity strong{font-size:12px;color:#f4f4f6}
+.ig-chat-identity span{font-size:10px;color:#8e909a}
+.inbox-chat-channel{display:flex;align-items:center;gap:7px;color:#b5b6bf;font-size:10px}
+.inbox-chat-channel .platform-logo{width:16px;height:16px}
+.ig-message-stream{max-height:none;min-height:440px;padding:25px clamp(16px,4vw,48px);gap:14px;background:#0d0e12;scroll-behavior:smooth}
+.inbox-chat-intro{display:flex;align-items:center;flex-direction:column;gap:7px;margin:4px auto 24px;color:#f1f1f4}
+.inbox-chat-intro .inbox-avatar{width:70px;height:70px;border-radius:50%;font-size:18px}
+.inbox-chat-intro strong{font-size:13px}
+.inbox-chat-intro small{font-size:10px;color:#8f919b}
+.ig-inbox-shell .inbox-bubble-row{align-items:flex-end;gap:7px}
+.inbox-message-avatar{width:23px;height:23px;flex:none;display:grid;place-items:center;border-radius:50%;background:linear-gradient(135deg,#7445a5,#e34d77,#f4a14d);color:white;font-size:7px;font-weight:800}
+.ig-inbox-shell .inbox-bubble{max-width:min(72%,560px);padding:10px 14px;border:0;border-radius:19px;background:#26272d}
+.ig-inbox-shell .inbox-bubble-row.inbound .inbox-bubble{border-bottom-left-radius:6px;background:#26272d}
+.ig-inbox-shell .inbox-bubble-row.outbound .inbox-bubble{border:0;border-radius:19px 19px 6px 19px;background:linear-gradient(135deg,#8c36bd,#d63f83);color:#fff}
+.ig-inbox-shell .inbox-bubble p{font-size:12px;line-height:1.55}
+.ig-inbox-shell .inbox-bubble time{margin-top:5px;color:rgba(255,255,255,.58);font-size:8px}
+.ig-inbox-shell .inbox-bubble-row.outbound .inbox-bubble time{color:rgba(255,255,255,.72)}
+.inbox-attachment-note{color:#d6d7dc!important}
+.ig-reply-form{grid-template-columns:minmax(0,1fr) 42px;gap:10px;padding:15px 18px 17px;background:#111216;border-top:1px solid #292a31}
+.ig-reply-form textarea{min-height:43px;max-height:130px;resize:none;padding:12px 15px;border:1px solid #45464f;border-radius:24px;background:#1c1d23;font-size:12px}
+.ig-reply-form textarea:focus{border-color:#a94b9a}
+.ig-reply-form .ig-send-button{width:42px;height:42px;display:grid;place-items:center;border:0;border-radius:50%;background:linear-gradient(135deg,#a13ac2,#e04482);color:white;cursor:pointer}
+.ig-reply-form .ig-send-button:disabled{opacity:.38;cursor:not-allowed}
+.ig-reply-form>small{grid-column:1/-1;padding-left:6px;color:#777984;font-size:9px}
+.inbox-diagnostic-report{padding:18px}
+.inbox-diagnostic-action{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+@media(max-width:720px){
+ .inbox-shell.ig-inbox-shell{grid-template-columns:1fr;min-height:0}
+ .ig-inbox-shell .inbox-list-panel{border-right:0;border-bottom:1px solid #292a31}
+ .ig-inbox-shell .inbox-conversation-list{max-height:270px}
+ .ig-inbox-shell .inbox-chat-panel{min-height:560px}
+ .ig-message-stream{min-height:360px;padding:18px 12px}
+ .ig-inbox-shell .inbox-bubble{max-width:84%}
+ .inbox-chat-channel{display:none}
+}
