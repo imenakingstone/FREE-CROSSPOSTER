@@ -1195,3 +1195,67 @@ body,.dashboard,.socialync-shell{background:#030526;color:#f5f7ff}
  .ig-inbox-shell .inbox-bubble{max-width:82%}
  .ig-inbox-shell .ig-reply-form{padding:11px 12px}
 }
+
+
+/* Compact Instagram inbox: keep the entire workspace inside the viewport. */
+.inbox-shell.ig-inbox-shell{
+  height:clamp(400px,calc(100dvh - 250px),620px);
+  min-height:400px;
+  max-height:620px;
+  overflow:hidden;
+  gap:0;
+}
+.ig-inbox-shell .inbox-list-panel{
+  min-height:0;
+  overflow:hidden;
+}
+.ig-inbox-shell .inbox-conversation-list{
+  min-height:0;
+  max-height:none;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+}
+.ig-inbox-shell .inbox-chat-panel{
+  min-height:0;
+  height:100%;
+  overflow:hidden;
+}
+.ig-inbox-shell .ig-message-stream{
+  min-height:0;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding:12px 16px 16px;
+}
+.ig-inbox-shell .inbox-chat-header{padding:10px 14px}
+.ig-inbox-shell .ig-reply-form{padding:9px 12px}
+.ig-inbox-shell .inbox-chat-intro{margin:4px auto 16px;padding:14px 18px}
+.ig-inbox-shell .inbox-chat-intro .inbox-avatar{width:64px;height:64px}
+.ig-inbox-shell .inbox-bubble{padding:8px 12px}
+@media(max-width:720px){
+  .inbox-shell.ig-inbox-shell{
+    height:auto;
+    min-height:0;
+    max-height:none;
+    overflow:visible;
+    display:flex;
+    flex-direction:column;
+  }
+  .ig-inbox-shell .inbox-list-panel{
+    height:auto;
+    max-height:190px;
+    min-height:0;
+    overflow:hidden;
+  }
+  .ig-inbox-shell .inbox-conversation-list{
+    flex:1 1 auto;
+    max-height:125px;
+    overflow-y:auto;
+  }
+  .ig-inbox-shell .inbox-chat-panel{
+    height:clamp(340px,55dvh,520px);
+    min-height:340px;
+    max-height:520px;
+  }
+  .ig-inbox-shell .ig-message-stream{padding:12px 10px 16px}
+  .ig-inbox-shell .ig-reply-form{padding:8px 10px}
+}
