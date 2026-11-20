@@ -76,6 +76,7 @@ export default function App() {
   const [inboxLastSynced, setInboxLastSynced] = useState(null)
   const [inboxDiagnostic, setInboxDiagnostic] = useState(null)
   const [inboxDiagnosticLoading, setInboxDiagnosticLoading] = useState(false)
+  const inboxMessageRequest = useRef(0)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -248,10 +249,13 @@ export default function App() {
     if (activeConversationId && !data?.some(item => item.id === activeConversationId)) setActiveConversationId(data?.[0]?.id || null)
   }
   async function loadInboxMessages(conversationId) {
+    const requestId = ++inboxMessageRequest.current
     if (!conversationId) { setInboxMessages([]); return }
     const { data, error } = await supabase.from('inbox_messages')
       .select('id,conversation_id,platform_message_id,direction,sender_id,message_text,attachments,delivery_status,sent_at')
       .eq('conversation_id', conversationId).order('sent_at', { ascending: true }).limit(200)
+    // Ignore late responses from a chat the user has already switched away from.
+    if (requestId !== inboxMessageRequest.current || activeConversationId !== conversationId) return
     if (error) setNotice(error.message); else setInboxMessages(data || [])
   }
   async function selectInboxConversation(conversation) {
