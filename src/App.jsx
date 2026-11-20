@@ -912,31 +912,54 @@ function HistoryView({logs,posts}) {
   return <><PageHeader eyebrow="ACTIVITY" title="Publishing history." description="Review publishing events and errors recorded by connected platforms."/><section className="card"><div className="history-list">{logs.map(log=><div className="simple-row" key={log.id}><div><strong>{postMap.get(log.post_id)?.caption||'Post activity'} · {log.platform}</strong><span>{new Date(log.created_at).toLocaleString()} · {log.message||'No additional details'}</span></div><span className={'draft-status '+(log.status==='published'?'success-status':'')}>{log.status}</span></div>)}{!logs.length&&<div className="empty-state">No publishing events have been recorded yet.</div>}</div></section></>
 }
 function Accounts({accounts,onConnect,onConnectTikTok,onDisconnect,busy}) {
-  return <><PageHeader eyebrow="YOUR SOCIAL CHANNELS" title="Connected accounts." description="Manage Instagram and TikTok now; YouTube connection is being prepared."/><div className="accounts-grid">
-    {platforms.map(p=><article className="account-card card" key={p.id}>
-      <div className="account-card-top"><span className={'platform-mark '+p.id}><PlatformLogo platform={p.id} /></span><span className="account-status pending">{accounts.filter(a=>a.platform===p.id&&a.account_status==='connected').length} connected</span></div>
-      <h2>{p.label}</h2>
-      <p className="muted small">{p.id==='instagram'?'Meta login for professional Instagram accounts.':'TikTok Content Posting API for video publishing.'}</p>
-      {accounts.filter(a=>a.platform===p.id&&a.environment==='production').map(a=><div className="channel-row" key={a.id}><span>{a.username?'@'+a.username:a.display_name||a.platform_user_id}</span><button className="danger-action" onClick={()=>onDisconnect(a)}><Trash2 size={13}/> Disconnect</button></div>)}
-      <button className="primary-btn full" onClick={p.id==='instagram'?onConnect:onConnectTikTok} disabled={busy}>
-        Connect {p.label} <PlatformLogo platform={p.id} />
-      </button>
-    </article>)}
-    <article className="account-card card">
-      <div className="account-card-top"><span className="platform-mark youtube"><PlatformLogo platform="youtube" /></span><span className="account-status pending">Setup required</span></div>
-      <h2>YouTube</h2>
-      <p className="muted small">YouTube channel connection and video publishing are the next integration to build.</p>
-      <button className="primary-btn full" disabled title="YouTube OAuth setup is not deployed yet">YouTube setup in progress</button>
-      <p className="fine-print">Requires a Google Cloud project, YouTube Data API v3, OAuth consent screen and client credentials.</p>
-    </article>
-    <article className="account-card card x-account-card">
-      <div className="account-card-top"><span className="platform-mark x"><PlatformLogo platform="x" /></span><span className="account-status soon">Planned</span></div>
-      <h2>X (Twitter)</h2>
-      <p className="muted small">We are preparing an X connection. Its current API uses pay-per-use credits, so publishing will remain disabled until costs and account limits are clear.</p>
-      <button className="secondary-btn full" disabled>Coming soon · API access required</button>
-      <p className="fine-print">We won't connect a paid API to your account without making the cost clear first.</p>
-    </article>
-  </div></>
+  const instagramAccounts=accounts.filter(a=>a.platform==='instagram'&&a.environment==='production');
+  const tiktokAccounts=accounts.filter(a=>a.platform==='tiktok'&&a.environment==='production');
+  return <>
+    <PageHeader eyebrow="YOUR SOCIAL CHANNELS" title="Connected accounts." description="Connect the channels you want to publish to. Your social permissions stay under your control."/>
+    <section className="instagram-connect-card card">
+      <div className="instagram-connect-art">
+        <span className="instagram-connect-orbit orbit-a"/><span className="instagram-connect-orbit orbit-b"/>
+        <span className="instagram-connect-logo"><PlatformLogo platform="instagram"/></span>
+        <span className="instagram-connect-spark spark-a">✦</span><span className="instagram-connect-spark spark-b">✧</span>
+      </div>
+      <div className="instagram-connect-copy">
+        <span className="instagram-connect-eyebrow"><i/> INSTAGRAM PROFESSIONAL ACCOUNTS</span>
+        <h2>Connect your Instagram.</h2>
+        <p>Bring your Instagram content into one workspace. Authorize your professional account to publish posts, manage comments and messages, and view insights.</p>
+        <div className="instagram-connect-features">
+          <span><Check size={15}/> Publish photos and videos</span>
+          <span><Check size={15}/> Manage comments and messages</span>
+          <span><Check size={15}/> View account insights</span>
+        </div>
+        <button className="instagram-connect-button" type="button" onClick={onConnect} disabled={busy}>
+          <PlatformLogo platform="instagram"/>{busy?'Opening secure authorization…':'Connect Instagram'} <span aria-hidden="true">↗</span>
+        </button>
+        <small className="instagram-connect-privacy"><ShieldCheck size={13}/> Secure authorization handled by Meta. Only the permissions you approve are granted.</small>
+      </div>
+      <div className="instagram-connect-accounts">
+        <div className="instagram-connect-account-heading"><strong>Your Instagram accounts</strong><span>{instagramAccounts.filter(a=>a.account_status==='connected').length} connected</span></div>
+        {instagramAccounts.length ? instagramAccounts.map(a=><div className="channel-row" key={a.id}><span><i className="connected-indicator"/> {a.username?'@'+a.username:a.display_name||a.platform_user_id}</span><button className="danger-action" onClick={()=>onDisconnect(a)}><Trash2 size={13}/> Disconnect</button></div>) : <p>No Instagram accounts connected yet.</p>}
+      </div>
+    </section>
+    <div className="accounts-grid accounts-secondary-grid">
+      <article className="account-card card">
+        <div className="account-card-top"><span className="platform-mark tiktok"><PlatformLogo platform="tiktok"/></span><span className="account-status pending">{tiktokAccounts.filter(a=>a.account_status==='connected').length} connected</span></div>
+        <h2>TikTok</h2><p className="muted small">Connect your TikTok account for video publishing.</p>
+        {tiktokAccounts.map(a=><div className="channel-row" key={a.id}><span>{a.username?'@'+a.username:a.display_name||a.platform_user_id}</span><button className="danger-action" onClick={()=>onDisconnect(a)}><Trash2 size={13}/> Disconnect</button></div>)}
+        <button className="primary-btn full" onClick={onConnectTikTok} disabled={busy}>Connect TikTok <PlatformLogo platform="tiktok"/></button>
+      </article>
+      <article className="account-card card">
+        <div className="account-card-top"><span className="platform-mark youtube"><PlatformLogo platform="youtube"/></span><span className="account-status pending">Setup required</span></div>
+        <h2>YouTube</h2><p className="muted small">YouTube channel connection and video publishing are being prepared.</p>
+        <button className="primary-btn full" disabled title="YouTube OAuth setup is not deployed yet">YouTube setup in progress</button>
+      </article>
+      <article className="account-card card x-account-card">
+        <div className="account-card-top"><span className="platform-mark x"><PlatformLogo platform="x"/></span><span className="account-status soon">Planned</span></div>
+        <h2>X (Twitter)</h2><p className="muted small">X publishing remains disabled until API costs and account limits are clear.</p>
+        <button className="secondary-btn full" disabled>Coming soon · API access required</button>
+      </article>
+    </div>
+  </>
 }
 function InboxView({conversations,messages,activeId,onSelect,draft,setDraft,onSend,loading,sending,accounts,onRefresh,onDiagnose,isAdmin,lastSynced}) {
   const active=conversations.find(item=>item.id===activeId)
