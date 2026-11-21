@@ -45,7 +45,7 @@ async function makeInstagramImageCompatible(file) {
     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.88))
     if (!blob) throw new Error('Could not convert this image to Instagram-compatible JPEG.')
     if (blob.size > 8 * 1024 * 1024) throw new Error('This image is still larger than Instagram\'s 8 MB feed-photo limit. Choose a smaller image.')
-    const baseName = file.name.replace(/\\.[^.]+$/, '') || 'instagram-image'
+    const baseName = file.name.replace(/\.[^.]+$/, '') || 'instagram-image'
     return new File([blob], baseName + '.jpg', { type: 'image/jpeg', lastModified: Date.now() })
   } finally {
     bitmap.close()
