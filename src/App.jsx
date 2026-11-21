@@ -22,6 +22,36 @@ function getAuthRedirectUrl() {
   return localHost ? window.location.origin : APP_PRODUCTION_URL
 }
 
+async function makeInstagramImageCompatible(file) {
+  if (!file?.type?.startsWith('image/')) return file
+  const bitmap = await createImageBitmap(file)
+  try {
+    const ratio = bitmap.width / bitmap.height
+    if (ratio < 0.8 || ratio > 1.91) {
+      throw new Error('Instagram feed photos must use an aspect ratio between 4:5 and 1.91:1. Crop the image before publishing.')
+    }
+    const scale = Math.min(1, 1440 / bitmap.width)
+    const width = Math.max(1, Math.round(bitmap.width * scale))
+    const height = Math.max(1, Math.round(bitmap.height * scale))
+    if (file.type === 'image/jpeg' && width === bitmap.width && file.size <= 8 * 1024 * 1024) return file
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('Could not prepare this image for Instagram.')
+    context.fillStyle = '#ffffff'
+    context.fillRect(0, 0, width, height)
+    context.drawImage(bitmap, 0, 0, width, height)
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.88))
+    if (!blob) throw new Error('Could not convert this image to Instagram-compatible JPEG.')
+    if (blob.size > 8 * 1024 * 1024) throw new Error('This image is still larger than Instagram\'s 8 MB feed-photo limit. Choose a smaller image.')
+    const baseName = file.name.replace(/\\.[^.]+$/, '') || 'instagram-image'
+    return new File([blob], baseName + '.jpg', { type: 'image/jpeg', lastModified: Date.now() })
+  } finally {
+    bitmap.close()
+  }
+}
+
 const workspaceViews = new Set(['overview','create','calendar','history','inbox','accounts','settings','system-health'])
 function isAuthPath(pathname) { return pathname === '/login' || pathname === '/signup' }
 function viewFromPath(pathname) {
@@ -529,14 +559,22 @@ export default function App() {
     try {
       let mediaType = null
       if (preparedFile) {
-        const allowed = ['image/jpeg','image/png','image/webp','image/gif','video/mp4','video/quicktime','video/webm']
-        if (!allowed.includes(preparedFile.type)) throw new Error('This file format is not supported.')
         if (preparedFile.size > 50 * 1024 * 1024) throw new Error('File is larger than the 50 MB limit.')
-        const extension = preparedFile.name.split('.').pop()?.toLowerCase() || 'bin'
+        let uploadFile = preparedFile
+        if (selectedPlatforms.includes('instagram') && preparedFile.type.startsWith('image/')) {
+          uploadFile = await makeInstagramImageCompatible(preparedFile)
+        }
+        if (selectedPlatforms.includes('instagram') && preparedFile.type.startsWith('video/') && !['video/mp4','video/quicktime'].includes(preparedFile.type)) {
+          throw new Error('Instagram Reels require an MP4 or MOV video. Convert this video before publishing.')
+        }
+        const allowed = ['image/jpeg','image/png','image/webp','image/gif','video/mp4','video/quicktime','video/webm']
+        if (!allowed.includes(uploadFile.type)) throw new Error('This file format is not supported.')
+        if (uploadFile.size > 50 * 1024 * 1024) throw new Error('Prepared media is larger than the 50 MB upload limit.')
+        const extension = uploadFile.name.split('.').pop()?.toLowerCase() || 'bin'
         mediaPath = `${session.user.id}/${crypto.randomUUID()}.${extension}`
-        const { error } = await supabase.storage.from('user-media').upload(mediaPath, preparedFile, { contentType: preparedFile.type, upsert: false })
+        const { error } = await supabase.storage.from('user-media').upload(mediaPath, uploadFile, { contentType: uploadFile.type, upsert: false })
         if (error) throw error
-        mediaType = preparedFile.type.startsWith('video/') ? 'video' : 'image'
+        mediaType = uploadFile.type.startsWith('video/') ? 'video' : 'image'
       }
       const { data: post, error: postError } = await supabase.from('posts').insert({
         user_id: session.user.id, caption: caption.trim(), media_path: mediaPath, media_type: mediaType,
